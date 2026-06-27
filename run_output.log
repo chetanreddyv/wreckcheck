@@ -5341,4 +5341,195 @@ responded: [{'text': "I'll conduct a comprehensive HarnessGuard audit of the cod
 ./venv/lib/python3.9/site-packages/pydantic/_internal/_generics.py
 ./venv/lib/python3.9/site-packages/uuid_utils-0.15.0.dist-info/sboms/uuid-utils.cyclonedx.json
 ./venv/lib/python3.9/site-packages/jiter-0.15.0.dist-info/sboms/jiter-python.cyclonedx.json
-./venv/lib/python3.9/site-packages/docstring_parser/epydoc.py[0m
+./venv/lib/python3.9/site-packages/docstring_parser/epydoc.py[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './agents/harness_guard.py'}`
+responded: [{'text': 'Now let me read the key agent files and reference materials:', 'type': 'text', 'index': 0}, {'id': 'toolu_01RreTJApVCJnxNz7yjXN4Z2', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./agents/harness_guard.py"}'}, {'id': 'toolu_01RQVXhiiRrizwi5xPJuSDBY', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./skills/harness-guard/SKILL.md"}'}, {'id': 'toolu_017mjoXc8LsAEKCGiuJZYrxo', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./skills/harness-guard/references/prompt-injection-checks.md"}'}, {'id': 'toolu_01V7aMNA1DH1XCm9tNMQ1AR7', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./skills/harness-guard/references/reliability-checks.md"}'}, {'id': 'toolu_014nsQD8j71eUPJ55sYCj5AK', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./skills/harness-guard/references/observability-checklist.md"}'}, {'id': 'toolu_018F5YtzGXG34E34D1668rKD', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 6, 'partial_json': '{"path": "./skills/harness-guard/references/cost-controls.md"}'}]
+
+[0m[36;1m[1;3mfrom deepagents import create_deep_agent
+
+try:
+    with open("skills/harness-guard/SKILL.md", "r") as f:
+        system_prompt = f.read()
+except FileNotFoundError:
+    system_prompt = "Audit the codebase for agent safety, prompt injection, cost, observability, and loop controls, and return the structured JSON report."
+
+harness_guard = create_deep_agent(
+    name="harness-guard",
+    model="claude-haiku-4-5",
+    system_prompt=system_prompt,
+    skills=["./skills/harness-guard/"],
+    tools=["read_file", "search_files"]
+)
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './skills/harness-guard/SKILL.md'}`
+responded: [{'text': 'Now let me read the key agent files and reference materials:', 'type': 'text', 'index': 0}, {'id': 'toolu_01RreTJApVCJnxNz7yjXN4Z2', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./agents/harness_guard.py"}'}, {'id': 'toolu_01RQVXhiiRrizwi5xPJuSDBY', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./skills/harness-guard/SKILL.md"}'}, {'id': 'toolu_017mjoXc8LsAEKCGiuJZYrxo', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./skills/harness-guard/references/prompt-injection-checks.md"}'}, {'id': 'toolu_01V7aMNA1DH1XCm9tNMQ1AR7', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./skills/harness-guard/references/reliability-checks.md"}'}, {'id': 'toolu_014nsQD8j71eUPJ55sYCj5AK', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./skills/harness-guard/references/observability-checklist.md"}'}, {'id': 'toolu_018F5YtzGXG34E34D1668rKD', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 6, 'partial_json': '{"path": "./skills/harness-guard/references/cost-controls.md"}'}]
+
+[0m[36;1m[1;3m---
+name: harness-guard
+description: Audits AI agent implementations for production readiness, including prompt injection exposure, retry loops, observability gaps, and cost-control failures.
+license: MIT
+allowed-tools: Read Glob Grep Write
+---
+
+# HarnessGuard — Production Readiness Audit
+
+Audits AI agent implementations for four key dimensions of production readiness: security, reliability, observability, and cost controls. Returns a structured JSON payload directly.
+
+## Audit Workflow
+
+Execute the following workflow sequentially:
+
+- [ ] **Step 1: Security Scan** — check for prompt injection exposure, especially user or tool output being interpolated directly into system prompts.
+> **Conditional Trigger**: Read `skills/harness-guard/references/prompt-injection-checks.md` during Step 1 for injection patterns.
+- [ ] **Step 2: Reliability Check** — check for unbounded retries, recursive delegation, or missing depth counters that create loops.
+> **Conditional Trigger**: Read `skills/harness-guard/references/reliability-checks.md` during Step 2.
+- [ ] **Step 3: Observability Check** — check for missing traces, no per-tool logs, no per-run token accounting, and no eval hooks.
+> **Conditional Trigger**: Read `skills/harness-guard/references/observability-checklist.md` during Step 3.
+- [ ] **Step 4: Cost Check** — check for cost blowups from oversized tool outputs, expensive default models, and missing token budgets or truncation rules.
+> **Conditional Trigger**: Read `skills/harness-guard/references/cost-controls.md` during Step 4.
+- [ ] **Step 5: Output JSON** — format and return the structured JSON object matching the schema below.
+
+## Critical Rules
+
+> [!CAUTION]
+> Record a **CRITICAL** finding if unbounded retry loops or recursive delegations are identified.
+
+> [!WARNING]
+> Record a **HIGH** finding if user input is interpolated into a system prompt without explicit escaping or boundary fencing.
+
+- **NEVER** guess — if you cannot find evidence of an observability trace or token budget, report it as absent.
+- **ALWAYS** return the JSON structure directly to the caller — do NOT write it to disk.
+
+## Output Schema
+
+Return a JSON object as your final response matching this schema exactly:
+
+```json
+{
+  "agent": "HarnessGuard",
+  "version": "1.0.0",
+  "target": "<repo_url_or_path>",
+  "timestamp": "<ISO8601>",
+  "summary": {
+    "total_findings": 0,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "info": 0
+  },
+  "dimensions": {
+    "security": { "score": 0, "max": 20, "findings": [] },
+    "reliability": { "score": 0, "max": 20, "findings": [] },
+    "observability": { "score": 0, "max": 20, "findings": [] },
+    "cost": { "score": 0, "max": 20, "findings": [] }
+  },
+  "top_gaps": [],
+  "top_fixes": []
+}
+```
+
+## Scoring Rules
+
+Each dimension starts at 20 points. Deduct per finding:
+- CRITICAL: −10
+- HIGH: −6
+- MEDIUM: −3
+- LOW: −1
+- INFO: 0
+
+Floor is 0 per dimension. Total raw score = sum of 4 dimensions (0–80).
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './skills/harness-guard/references/prompt-injection-checks.md'}`
+responded: [{'text': 'Now let me read the key agent files and reference materials:', 'type': 'text', 'index': 0}, {'id': 'toolu_01RreTJApVCJnxNz7yjXN4Z2', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./agents/harness_guard.py"}'}, {'id': 'toolu_01RQVXhiiRrizwi5xPJuSDBY', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./skills/harness-guard/SKILL.md"}'}, {'id': 'toolu_017mjoXc8LsAEKCGiuJZYrxo', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./skills/harness-guard/references/prompt-injection-checks.md"}'}, {'id': 'toolu_01V7aMNA1DH1XCm9tNMQ1AR7', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./skills/harness-guard/references/reliability-checks.md"}'}, {'id': 'toolu_014nsQD8j71eUPJ55sYCj5AK', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./skills/harness-guard/references/observability-checklist.md"}'}, {'id': 'toolu_018F5YtzGXG34E34D1668rKD', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 6, 'partial_json': '{"path": "./skills/harness-guard/references/cost-controls.md"}'}]
+
+[0m[36;1m[1;3m# Prompt Injection & Security Checks
+
+Audit the agent's system prompts, tools, and execution environment for the following OWASP Agentic Top 10 risks:
+
+## AG01 — Prompt Injection
+Patterns to grep for in agent system prompts, SKILL.md files, and instructions:
+- [ ] Hidden instructions in HTML/Markdown comments (`<!-- ignore previous -->`)
+- [ ] Zero-width Unicode characters in prompt strings (invisible override text)
+- [ ] Base64-encoded instruction blocks in string literals
+- [ ] Override phrases: "ignore previous instructions", "you are now", "do not tell the user"
+- [ ] User input interpolated directly into system prompts without sanitisation
+  ```python
+  # BAD
+  system_prompt = f"You are an assistant. User said: {user_input}"
+  # GOOD
+  system_prompt = "You are an assistant."
+  messages = [{"role": "user", "content": user_input}]
+  ```
+
+## AG02 — Insecure Tool Utilization
+- [ ] Shell commands constructed from dynamic input:
+  ```python
+  os.system(f"git clone {repo_url}")   # BAD — repo_url could be malicious
+  subprocess.run(f"pip install {pkg}")  # BAD
+  ```
+- [ ] `eval()` or `exec()` on non-constant input
+- [ ] Tool calls bypass confirmation (`auto_confirm=True` without scope limit)
+- [ ] Agent tools have no input validation or sanitisation
+- [ ] File write tools can write to arbitrary paths (no path restriction)
+
+## AG03 — Excessive Agency
+- [ ] File access tools can read/write outside defined workspace (`../`, `~/.ssh`, `/etc/`)
+- [ ] Agent tools include `sudo` or privilege escalation
+- [ ] Background process spawning (`nohup`, `&`, daemon patterns)
+- [ ] Agent can modify its own skill files or other agents' configs
+- [ ] Tool scope covers systems beyond stated purpose
+
+## AG05 — Data Exfiltration
+- [ ] Agent code makes outbound HTTP requests to domains not in its stated purpose
+- [ ] Environment variables harvested and included in output/logs (`os.environ`)
+- [ ] Repo contents written to external service (not just `/workspace/`)
+- [ ] Sensitive file paths read and contents included in output unnecessarily
+
+## AG08 — Memory Poisoning
+- [ ] Agent does NOT write to `MEMORY.md`, `AGENTS.md`, `SOUL.md`, or system context files
+- [ ] Agent does NOT modify other agents' SKILL.md files
+- [ ] Shared workspace (`/workspace/`) is scoped — agents only write their own output files
+- [ ] No persistent context injection across runs (stateless between invocations)
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './skills/harness-guard/references/reliability-checks.md'}`
+responded: [{'text': 'Now let me read the key agent files and reference materials:', 'type': 'text', 'index': 0}, {'id': 'toolu_01RreTJApVCJnxNz7yjXN4Z2', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./agents/harness_guard.py"}'}, {'id': 'toolu_01RQVXhiiRrizwi5xPJuSDBY', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./skills/harness-guard/SKILL.md"}'}, {'id': 'toolu_017mjoXc8LsAEKCGiuJZYrxo', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./skills/harness-guard/references/prompt-injection-checks.md"}'}, {'id': 'toolu_01V7aMNA1DH1XCm9tNMQ1AR7', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./skills/harness-guard/references/reliability-checks.md"}'}, {'id': 'toolu_014nsQD8j71eUPJ55sYCj5AK', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./skills/harness-guard/references/observability-checklist.md"}'}, {'id': 'toolu_018F5YtzGXG34E34D1668rKD', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 6, 'partial_json': '{"path": "./skills/harness-guard/references/cost-controls.md"}'}]
+
+[0m[36;1m[1;3m# Reliability & Multi-Agent Stability Checks
+
+Audit the multi-agent orchestration for reliability, loop constraints, and safe output handling:
+
+## AG04 — Insecure Output Handling
+- [ ] Agent output written to files that other agents read without sanitisation
+  - e.g., `/workspace/*.json` should be validated by consumer before use
+- [ ] Report output could be interpreted as a prompt by another agent
+  - e.g., including `Ignore previous instructions` in a finding title
+- [ ] JSON output is not schema-validated before downstream consumption
+
+## AG09 — Multi-Agent Exploitation
+- [ ] No cross-agent prompt injection via shared workspace files
+  - e.g., Agent output in `audit.json` should be structured JSON, not free text with instructions
+- [ ] Orchestrator only delegates to known, registered sub-agents (not dynamically resolved from user input)
+- [ ] Sub-agent names/identities are not user-controlled
+
+## AG10 — Resource Abuse (Execution Stability)
+- [ ] No unbounded `while True` loops in agent tool code
+- [ ] No recursive agent delegation (A calls B calls A)
+- [ ] Hard-crashing on tool execution failures without graceful error messages returned to the agent
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './skills/harness-guard/references/observability-checklist.md'}`
+responded: [{'text': 'Now let me read the key agent files and reference materials:', 'type': 'text', 'index': 0}, {'id': 'toolu_01RreTJApVCJnxNz7yjXN4Z2', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./agents/harness_guard.py"}'}, {'id': 'toolu_01RQVXhiiRrizwi5xPJuSDBY', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./skills/harness-guard/SKILL.md"}'}, {'id': 'toolu_017mjoXc8LsAEKCGiuJZYrxo', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./skills/harness-guard/references/prompt-injection-checks.md"}'}, {'id': 'toolu_01V7aMNA1DH1XCm9tNMQ1AR7', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./skills/harness-guard/references/reliability-checks.md"}'}, {'id': 'toolu_014nsQD8j71eUPJ55sYCj5AK', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./skills/harness-guard/references/observability-checklist.md"}'}, {'id': 'toolu_018F5YtzGXG34E34D1668rKD', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 6, 'partial_json': '{"path": "./skills/harness-guard/references/cost-controls.md"}'}]
+
+[0m[36;1m[1;3m# Observability Checklist
+
+Ensure the agent system is fully instrumented for auditing and trace analysis:
+
+## AG07 — Insufficient Monitoring
+- [ ] Every tool call is logged with: tool name, inputs, outputs, timestamp
+- [ ] Sub-agent delegation is logged (Orchestrator logs which agent it called and when)
+- [ ] Token usage per LLM call is recorded
+- [ ] Output file writes are confirmed (agent verifies file exists after write)
+- [ ] Failed tool calls are logged with full error context, not swallowed
+- [ ] Agent trajectories being saved or logged (e.g., LangSmith, local JSON logs)
+- [ ] Eval hooks or `agenteval` / `promptfoo` configurations exist in the repository
+[0m
