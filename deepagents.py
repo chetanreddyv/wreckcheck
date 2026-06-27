@@ -155,7 +155,15 @@ class DeepAgent:
     def run(self, input_text):
         print(f"\n[{self.name}] Running with input: {input_text}")
         result = self.agent_executor.invoke({"input": input_text})
-        return result["output"]
+        output = result["output"]
+        if isinstance(output, list):
+            try:
+                output = "".join([b.get("text", "") for b in output if isinstance(b, dict)])
+            except Exception:
+                output = str(output)
+        elif not isinstance(output, str):
+            output = str(output)
+        return output
 
 def create_deep_agent(name, model, system_prompt, tools, sub_agents=None, workspace_dir=None, skills=None):
     return DeepAgent(name, model, system_prompt, tools, sub_agents, workspace_dir, skills)
