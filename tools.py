@@ -14,7 +14,42 @@ def fetch_repo_files(repo_url: str) -> str:
         repo_url = repo_url[:-4]
     base = repo_url.replace("https://github.com/", "https://api.github.com/repos/")
     headers = {"Accept": "application/vnd.github.v3+json"}
-    target_files = ["README.md", "main.py"]
+    # Try to fetch the default branch tree
+    try:
+        r = requests.get(f"{base}/git/trees/main?recursive=1", headers=headers, timeout=10)
+        if r.status_code == 404:
+            r = requests.get(f"{base}/git/trees/master?recursive=1", headers=headers, timeout=10)
+            
+        if r.status_code != 200:
+            return f"Error fetching repo tree: {r.status_code} {r.text}"
+            
+        tree = r.json().get("tree", [])
+    except Exception as e:
+        return f"Error connecting to GitHub API: {e}"
+        
+    allowed_exts = ('.py', '.js', '.ts', '.md', '.json', '.yml', '.yaml', '.toml', '.env.example')
+    ignored_dirs = ('node_modules/', 'venv/', '.git/', '__pycache__/', 'dist/', 'build/')
+    
+    all_files = []
+    for item in tree:
+        if item["type"] == "blob":
+            path = item["path"]
+            if any(path.startswith(d) for d in ignored_dirs):
+                continue
+            if path.endswith(allowed_exts) or path in ('Dockerfile', 'Makefile'):
+                all_files.append(path)
+                
+    # Prioritize important files to avoid context limits
+    def priority(path):
+        p = path.lower()
+        if 'readme' in p: return 0
+        if 'main' in p or 'app' in p or 'index' in p: return 1
+        if 'requirement' in p or 'package.json' in p or 'pyproject' in p: return 2
+        return 3
+        
+    all_files.sort(key=priority)
+    target_files = all_files[:15]  # Limit to 15 files
+    
     contents = []
     for f in target_files:
         try:
@@ -28,6 +63,7 @@ def fetch_repo_files(repo_url: str) -> str:
                 contents.append(f"=== {f} ===\nNOT FOUND (HTTP {r.status_code})")
         except Exception as e:
             contents.append(f"=== {f} ===\nERROR: {str(e)}")
+            
     result = "\n\n".join(contents)
     os.makedirs("./workspace", exist_ok=True)
     with open("./workspace/repo_contents.txt", "w") as out:
