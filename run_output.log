@@ -5532,4 +5532,1498 @@ Ensure the agent system is fully instrumented for auditing and trace analysis:
 - [ ] Failed tool calls are logged with full error context, not swallowed
 - [ ] Agent trajectories being saved or logged (e.g., LangSmith, local JSON logs)
 - [ ] Eval hooks or `agenteval` / `promptfoo` configurations exist in the repository
-[0m
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './skills/harness-guard/references/cost-controls.md'}`
+responded: [{'text': 'Now let me read the key agent files and reference materials:', 'type': 'text', 'index': 0}, {'id': 'toolu_01RreTJApVCJnxNz7yjXN4Z2', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./agents/harness_guard.py"}'}, {'id': 'toolu_01RQVXhiiRrizwi5xPJuSDBY', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./skills/harness-guard/SKILL.md"}'}, {'id': 'toolu_017mjoXc8LsAEKCGiuJZYrxo', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./skills/harness-guard/references/prompt-injection-checks.md"}'}, {'id': 'toolu_01V7aMNA1DH1XCm9tNMQ1AR7', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./skills/harness-guard/references/reliability-checks.md"}'}, {'id': 'toolu_014nsQD8j71eUPJ55sYCj5AK', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./skills/harness-guard/references/observability-checklist.md"}'}, {'id': 'toolu_018F5YtzGXG34E34D1668rKD', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 6, 'partial_json': '{"path": "./skills/harness-guard/references/cost-controls.md"}'}]
+
+[0m[36;1m[1;3m# Cost & Supply Chain Controls
+
+Audit the agent for unbounded resource consumption and unpinned dependencies:
+
+## AG06 — Supply Chain (Agent-Specific)
+- [ ] Agent framework (`deepagents`, `langchain`, etc.) pinned to exact version in dependencies
+- [ ] No runtime code fetching (`exec(requests.get(...).text)`)
+- [ ] SKILL.md files from third-party sources reviewed before `allowed-tools` grants
+- [ ] Sub-agent packages are from verified sources
+
+## AG10 — Resource Abuse (Cost Limits)
+- [ ] File fetch tools have a timeout (`timeout=5` on requests calls)
+- [ ] Token budget per run is bounded (hard limit on LLM calls per agent run)
+- [ ] Tool outputs are truncated or capped to prevent context window blowups (e.g., limiting `grep` to 100 lines)
+- [ ] Workspace cleanup after run (temp files removed)
+- [ ] Fallback to cheaper models for simple routing or formatting tasks
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './deepagents.py'}`
+responded: [{'text': 'Now let me read the main agent files and deepagents framework:', 'type': 'text', 'index': 0}, {'id': 'toolu_018Q148YpczYPDduy2rxadUQ', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./deepagents.py"}'}, {'id': 'toolu_01W5HnyojfdC2wM8Gd1WBV3h', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./main.py"}'}, {'id': 'toolu_01QMfYAskCaZzrzRH8j6YnqH', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./agents/code_sentinel.py"}'}, {'id': 'toolu_01CmK5fjJEmadv7GgvL8M9Kf', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./agents/arch_reviewer.py"}'}, {'id': 'toolu_01FUpSA4arE9zpDnhEqJWYik', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./agents/readiness_scorer.py"}'}]
+
+[0m[36;1m[1;3mimport os
+import json
+from langchain_anthropic import ChatAnthropic
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.tools import Tool
+
+import tools as tools_module
+
+class DeepAgent:
+    def __init__(self, name, model, system_prompt, tools, sub_agents=None, workspace_dir=None, skills=None):
+        self.name = name
+        self.system_prompt = system_prompt
+        self.sub_agents = sub_agents or []
+        self.workspace_dir = workspace_dir
+        self.skills = skills
+        
+        model_name = model
+            
+        api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("anthropic_api_key")
+        self.llm = ChatAnthropic(model=model_name, temperature=0, max_tokens=4096, api_key=api_key)
+        
+        self.resolved_tools = []
+        # Resolve string tools from tools.py or use actual functions
+        for t in tools:
+            if isinstance(t, str):
+                if hasattr(tools_module, t):
+                    self.resolved_tools.append(getattr(tools_module, t))
+                else:
+                    print(f"Warning: Tool {t} not found in tools.py")
+            else:
+                self.resolved_tools.append(t)
+                
+        # Create tools for sub-agents
+        for sa in self.sub_agents:
+            if isinstance(sa, dict):
+                pass
+            else:
+                from langchain_core.tools import StructuredTool
+                from pydantic import BaseModel, Field
+
+                class DelegateInput(BaseModel):
+                    input_text: str = Field(description="The detailed instruction or data to process.")
+
+                def make_delegate_func(agent):
+                    def delegate_func(input_text: str) -> str:
+                        return agent.run(input_text)
+                    return delegate_func
+                    
+                sa_tool = StructuredTool.from_function(
+                    name=f"delegate_to_{sa.name.replace('-', '_')}",
+                    func=make_delegate_func(sa),
+                    description=f"Delegate tasks to {sa.name}. Input should be a detailed instruction or the data to process.",
+                    args_schema=DelegateInput
+                )
+                self.resolved_tools.append(sa_tool)
+                
+        # Create the agent
+        from langchain_core.messages import SystemMessage
+        prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content=self.system_prompt),
+            ("user", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ])
+        
+        agent = create_tool_calling_agent(self.llm, self.resolved_tools, prompt)
+        self.agent_executor = AgentExecutor(agent=agent, tools=self.resolved_tools, verbose=True, handle_parsing_errors=True)
+
+    def run(self, input_text):
+        print(f"\n[{self.name}] Running with input: {input_text}")
+        result = self.agent_executor.invoke({"input": input_text})
+        return result["output"]
+
+def create_deep_agent(name, model, system_prompt, tools, sub_agents=None, workspace_dir=None, skills=None):
+    return DeepAgent(name, model, system_prompt, tools, sub_agents, workspace_dir, skills)
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './main.py'}`
+responded: [{'text': 'Now let me read the main agent files and deepagents framework:', 'type': 'text', 'index': 0}, {'id': 'toolu_018Q148YpczYPDduy2rxadUQ', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./deepagents.py"}'}, {'id': 'toolu_01W5HnyojfdC2wM8Gd1WBV3h', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./main.py"}'}, {'id': 'toolu_01QMfYAskCaZzrzRH8j6YnqH', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./agents/code_sentinel.py"}'}, {'id': 'toolu_01CmK5fjJEmadv7GgvL8M9Kf', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./agents/arch_reviewer.py"}'}, {'id': 'toolu_01FUpSA4arE9zpDnhEqJWYik', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./agents/readiness_scorer.py"}'}]
+
+[0m[36;1m[1;3mimport os
+import dotenv
+dotenv.load_dotenv()
+if "anthropic_api_key" in os.environ and "ANTHROPIC_API_KEY" not in os.environ:
+    os.environ["ANTHROPIC_API_KEY"] = os.environ["anthropic_api_key"]
+from deepagents import create_deep_agent
+from tools import fetch_repo_files, read_file, write_file
+
+# --- Define sub-agents first (import from their own files) ---
+from agents.code_sentinel import code_sentinel
+from agents.arch_reviewer import arch_reviewer
+from agents.readiness_scorer import readiness_scorer
+from agents.harness_guard import harness_guard
+
+SCOUT_SYSTEM_PROMPT = """
+You are Scout, the orchestrating agent of the ReadyCheck enterprise readiness system.
+
+YOUR ONLY JOB:
+1. Receive a GitHub repo URL and product description.
+2. Fetch these files from the repo (use the fetch_repo_files tool). This tool automatically writes the fetched content to ./workspace/repo_contents.txt
+3. Delegate to CodeSentinel (use delegate_to_CodeSentinel tool): "Audit ./workspace/repo_contents.txt for enterprise readiness issues and return the structured JSON report."
+4. Delegate to ArchitectReview (use delegate_to_ArchitectReview tool): "Review ./workspace/repo_contents.txt for architecture quality and return the structured JSON report."
+5. Delegate to HarnessGuard (use delegate_to_harness_guard tool): "Audit the codebase for agent safety, prompt injection, cost, observability, and loop controls, and return the structured JSON report."
+6. Wait for CodeSentinel, ArchitectReview, and HarnessGuard to return their JSON reports.
+7. Delegate to ReadinessScorer (use delegate_to_ReadinessScorer tool). You MUST provide the `input_text` parameter containing the string: "Analyze the following JSON reports..." followed by all three JSON reports concatenated into a single string.
+8. Return ReadinessScorer's final report as your final output.
+
+RULES:
+- Do NOT perform any auditing or scoring yourself.
+- Do NOT skip delegation — always route to the correct sub-agent.
+- Do NOT proceed to ReadinessScorer until CodeSentinel, ArchitectReview, and HarnessGuard have returned their JSON responses.
+- If a file cannot be fetched from the repo, write "NOT FOUND" for that file in repo_contents.txt and continue.
+"""
+
+# --- Scout (Orchestrator) ---
+scout = create_deep_agent(
+    name="Scout",
+    model="claude-haiku-4-5",
+    sub_agents=[code_sentinel, arch_reviewer, harness_guard, readiness_scorer],
+    tools=[fetch_repo_files],
+    system_prompt=SCOUT_SYSTEM_PROMPT,
+    workspace_dir="./workspace",
+)
+
+# --- Entry point ---
+def run(repo_url: str, description: str) -> str:
+    result = scout.run(
+        f"Assess enterprise readiness for: {repo_url}\nProduct description: {description}"
+    )
+    return result
+
+if __name__ == "__main__":
+    import sys
+    url = sys.argv[1] if len(sys.argv) > 1 else "https://github.com/your/repo"
+    desc = sys.argv[2] if len(sys.argv) > 2 else "Multi-agent AI system"
+    print(run(url, desc))[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './agents/code_sentinel.py'}`
+responded: [{'text': 'Now let me read the main agent files and deepagents framework:', 'type': 'text', 'index': 0}, {'id': 'toolu_018Q148YpczYPDduy2rxadUQ', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./deepagents.py"}'}, {'id': 'toolu_01W5HnyojfdC2wM8Gd1WBV3h', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./main.py"}'}, {'id': 'toolu_01QMfYAskCaZzrzRH8j6YnqH', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./agents/code_sentinel.py"}'}, {'id': 'toolu_01CmK5fjJEmadv7GgvL8M9Kf', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./agents/arch_reviewer.py"}'}, {'id': 'toolu_01FUpSA4arE9zpDnhEqJWYik', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./agents/readiness_scorer.py"}'}]
+
+[0m[36;1m[1;3mfrom deepagents import create_deep_agent
+
+try:
+    with open("skills/code-auditor/SKILL.md", "r") as f:
+        system_prompt = f.read()
+except FileNotFoundError:
+    system_prompt = "Audit /workspace/repo_contents.txt for enterprise readiness issues and return a structured JSON report."
+
+code_sentinel = create_deep_agent(
+    name="CodeSentinel",
+    model="claude-haiku-4-5",
+    system_prompt=system_prompt,
+    tools=["read_file", "search_files"]
+)
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './agents/arch_reviewer.py'}`
+responded: [{'text': 'Now let me read the main agent files and deepagents framework:', 'type': 'text', 'index': 0}, {'id': 'toolu_018Q148YpczYPDduy2rxadUQ', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./deepagents.py"}'}, {'id': 'toolu_01W5HnyojfdC2wM8Gd1WBV3h', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./main.py"}'}, {'id': 'toolu_01QMfYAskCaZzrzRH8j6YnqH', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./agents/code_sentinel.py"}'}, {'id': 'toolu_01CmK5fjJEmadv7GgvL8M9Kf', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./agents/arch_reviewer.py"}'}, {'id': 'toolu_01FUpSA4arE9zpDnhEqJWYik', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./agents/readiness_scorer.py"}'}]
+
+[0m[36;1m[1;3mfrom deepagents import create_deep_agent
+
+try:
+    with open("skills/architecture-reviewer/SKILL.md", "r") as f:
+        system_prompt = f.read()
+except FileNotFoundError:
+    system_prompt = "Review /workspace/repo_contents.txt for architecture quality and return a structured JSON report."
+
+arch_reviewer = create_deep_agent(
+    name="ArchitectReview",
+    model="claude-haiku-4-5",
+    system_prompt=system_prompt,
+    tools=["read_file"]
+)
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './agents/readiness_scorer.py'}`
+responded: [{'text': 'Now let me read the main agent files and deepagents framework:', 'type': 'text', 'index': 0}, {'id': 'toolu_018Q148YpczYPDduy2rxadUQ', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 1, 'partial_json': '{"path": "./deepagents.py"}'}, {'id': 'toolu_01W5HnyojfdC2wM8Gd1WBV3h', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./main.py"}'}, {'id': 'toolu_01QMfYAskCaZzrzRH8j6YnqH', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./agents/code_sentinel.py"}'}, {'id': 'toolu_01CmK5fjJEmadv7GgvL8M9Kf', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./agents/arch_reviewer.py"}'}, {'id': 'toolu_01FUpSA4arE9zpDnhEqJWYik', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 5, 'partial_json': '{"path": "./agents/readiness_scorer.py"}'}]
+
+[0m[36;1m[1;3mfrom deepagents import create_deep_agent
+
+try:
+    with open("skills/readiness-scorer/SKILL.md", "r") as f:
+        system_prompt = f.read()
+except FileNotFoundError:
+    system_prompt = "Read the JSON reports provided from CodeSentinel and ArchitectReview to produce a final report."
+
+readiness_scorer = create_deep_agent(
+    name="ReadinessScorer",
+    model="claude-haiku-4-5",
+    system_prompt=system_prompt,
+    tools=["read_file", "search_files"]
+)
+[0m[32;1m[1;3m
+Invoking: `search_files` with `{'query': 'tools.py', 'directory': '.'}`
+responded: [{'text': 'Now let me check the tools module and skill files:', 'type': 'text', 'index': 0}, {'id': 'toolu_01EQmcepZnpogKejT61y8XGM', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 1, 'partial_json': '{"query": "tools.py", "directory": "."}'}, {'id': 'toolu_01NkeMLSvVpMiKgNaeiboAHT', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./skills/code-auditor/SKILL.md"}'}, {'id': 'toolu_01361jfj13KitspwswK2NV2v', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./skills/architecture-reviewer/SKILL.md"}'}, {'id': 'toolu_01QUyp1a2RtwJBr2GoN7t2ne', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./skills/readiness-scorer/SKILL.md"}'}]
+
+[0m[33;1m[1;3m./deepagents.py
+./venv/lib/python3.9/site-packages/langsmith/run_helpers.py
+./venv/lib/python3.9/site-packages/langsmith/_internal/_aiter.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/_arunner.py
+./venv/lib/python3.9/site-packages/langchain_core/utils/aiter.py[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './skills/code-auditor/SKILL.md'}`
+responded: [{'text': 'Now let me check the tools module and skill files:', 'type': 'text', 'index': 0}, {'id': 'toolu_01EQmcepZnpogKejT61y8XGM', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 1, 'partial_json': '{"query": "tools.py", "directory": "."}'}, {'id': 'toolu_01NkeMLSvVpMiKgNaeiboAHT', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./skills/code-auditor/SKILL.md"}'}, {'id': 'toolu_01361jfj13KitspwswK2NV2v', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./skills/architecture-reviewer/SKILL.md"}'}, {'id': 'toolu_01QUyp1a2RtwJBr2GoN7t2ne', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./skills/readiness-scorer/SKILL.md"}'}]
+
+[0m[36;1m[1;3m---
+name: code-auditor
+description: "Use when CodeSentinel needs to audit a codebase for enterprise readiness. Scans line-by-line for secrets, security hygiene, dependency supply chain risks, observability gaps, license compliance, and CI/CD hardening. Returns structured JSON findings directly. Triggered by Scout orchestrator in the WreckCheck multi-agent pipeline."
+license: MIT
+metadata:
+  author: WreckCheck
+  version: "1.0.0"
+  repository: https://github.com/chetanreddyv/wreckcheck
+allowed-tools: Read Glob Grep Write
+---
+
+# CodeSentinel — Enterprise Code Audit
+
+Systematically scan a codebase for enterprise readiness gaps across 5 dimensions.
+Read `skills/code-auditor/references/hygiene-checklist.md` before starting. Read `skills/code-auditor/references/severity-levels.md`
+to calibrate finding severity.
+
+## When to Use
+
+- Auditing a GitHub repo's code for enterprise readiness as part of the WreckCheck pipeline
+- Identifying hardcoded secrets, missing licenses, absent test harnesses, poor observability
+- Returning a structured JSON output directly to the orchestrator
+
+## Audit Workflow
+
+Execute the following workflow sequentially:
+
+- [ ] **Step 1: Inventory** — list all files; note languages, entry points, config files, CI workflows.
+> **Conditional Trigger**: Read `skills/code-auditor/references/hygiene-checklist.md` before starting the inventory to understand the full per-dimension checklist.
+- [ ] **Step 2: Secrets Scan** — grep for hardcoded credentials, exposed `.env` files, API keys in code.
+- [ ] **Step 3: Dependency Check** — inspect `requirements.txt`, `package.json`, `composer.json` for unpinned or absent versions.
+- [ ] **Step 4: Observability Check** — look for logging, error handling, metrics instrumentation.
+- [ ] **Step 5: Test Harness Check** — look for `tests/`, `evals/`, `pytest`, `unittest`, test CI jobs.
+- [ ] **Step 6: License Check** — verify `LICENSE` file exists; check `requirements.txt` for license-incompatible deps.
+- [ ] **Step 7: CI/CD Hardening** — check `.github/workflows/` for pinned actions, permissions declarations, secret injection patterns.
+- [ ] **Step 8: Score & Output** — return findings as a structured JSON object matching the output schema.
+> **Conditional Trigger**: Read `skills/code-auditor/references/severity-levels.md` before scoring to calibrate finding severity, and `skills/code-auditor/references/output-template.md` to see a complete well-formed output example.
+
+## Critical Rules
+
+> [!IMPORTANT]
+> **NEVER** skip a dimension — if a file is missing (e.g., no LICENSE), that IS a finding.
+
+> [!CAUTION]
+> **ALWAYS** check `.env` against `.gitignore` — committed `.env` = CRITICAL finding.
+
+> [!WARNING]
+> **ALWAYS** check `requirements.txt` for pinned versions; floating `>=` deps = MEDIUM finding.
+
+- **NEVER** guess — if you cannot find evidence of a control, report it as absent.
+- **ALWAYS** return the structured JSON directly — do NOT write it to disk or print to stdout only.
+
+## Output Schema
+
+Return a JSON object as your final response matching this schema exactly:
+
+```json
+{
+  "agent": "CodeSentinel",
+  "version": "1.0.0",
+  "target": "<repo_url_or_path>",
+  "timestamp": "<ISO8601>",
+  "summary": {
+    "total_findings": 0,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "info": 0
+  },
+  "dimensions": {
+    "secrets": { "score": 0, "max": 20, "findings": [] },
+    "dependencies": { "score": 0, "max": 20, "findings": [] },
+    "observability": { "score": 0, "max": 20, "findings": [] },
+    "testing": { "score": 0, "max": 20, "findings": [] },
+    "ci_hardening": { "score": 0, "max": 20, "findings": [] }
+  },
+  "top_gaps": [],
+  "top_fixes": []
+}
+```
+
+Each finding in a dimension's `findings` array:
+```json
+{
+  "id": "SEC-001",
+  "severity": "CRITICAL",
+  "title": ".env committed to repository",
+  "file": ".env",
+  "line": null,
+  "evidence": "anthrpic_api_key = sk-...",
+  "description": "Credentials file is tracked in git and publicly visible.",
+  "fix": "Run: git rm --cached .env && echo .env >> .gitignore && git commit"
+}
+```
+
+## Scoring Per Dimension
+
+Each dimension scores 0–20. Start at 20, deduct per finding:
+- CRITICAL: −10
+- HIGH: −6
+- MEDIUM: −3
+- LOW: −1
+- INFO: 0 (no deduction)
+
+Floor is 0. Total raw score = sum of 5 dimensions (0–100).
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './skills/architecture-reviewer/SKILL.md'}`
+responded: [{'text': 'Now let me check the tools module and skill files:', 'type': 'text', 'index': 0}, {'id': 'toolu_01EQmcepZnpogKejT61y8XGM', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 1, 'partial_json': '{"query": "tools.py", "directory": "."}'}, {'id': 'toolu_01NkeMLSvVpMiKgNaeiboAHT', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./skills/code-auditor/SKILL.md"}'}, {'id': 'toolu_01361jfj13KitspwswK2NV2v', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./skills/architecture-reviewer/SKILL.md"}'}, {'id': 'toolu_01QUyp1a2RtwJBr2GoN7t2ne', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./skills/readiness-scorer/SKILL.md"}'}]
+
+[0m[36;1m[1;3m---
+name: architecture-reviewer
+description: >
+  Reviews agent skill architecture for spec compliance, structural quality,
+  and multi-agent design validity. Use when asked to review a SKILL.md file,
+  validate agent architecture, check skill folder structure, audit delegation
+  patterns, or verify a skill meets the agentskills.io specification.
+license: MIT
+metadata:
+  author: your-org
+  version: "1.0.0"
+allowed-tools: Read Glob Bash(grep:*)
+---
+
+# Architecture Reviewer
+
+Review agent skills and multi-agent designs against the agentskills.io specification and architecture quality standards. Return a structured JSON report.
+
+## Review Workflow
+
+Execute the following review workflow sequentially when auditing an agent skill or multi-agent design:
+
+- [ ] **Step 1: File Inventory** — Inventory all files and directories in the skill folder.
+- [ ] **Step 2: YAML Frontmatter Validation** — Verify frontmatter fields against strict specification rules.
+- [ ] **Step 3: Directory and File Organization** — Audit directory structure and file placement.
+- [ ] **Step 4: Progressive Disclosure Compliance** — Ensure token efficiency and conditional loading.
+- [ ] **Step 5: Architecture Rationale and Delegation Design** — Evaluate agent responsibilities and multi-agent interactions.
+- [ ] **Step 6: Output Verdict** — Generate a comprehensive review report using the standard template.
+
+---
+
+## Step 1 — File Inventory
+
+1. List every file and folder present within the skill directory.
+2. Flag any files exceeding **500 lines** of text.
+3. Identify unexpected file types (e.g., compiled binaries, large archives, or deeply nested directories beyond standard structures).
+4. Confirm that `SKILL.md` exists directly at the root of the skill directory.
+
+---
+
+## Step 2 — YAML Frontmatter Validation
+
+Check each frontmatter field against the following requirements:
+
+### `name` (required)
+- Present and non-empty.
+- 1–64 characters in length.
+- Contains only lowercase letters, numbers, hyphens, or underscores (`[a-z0-9_-]+`) — no uppercase letters, no spaces.
+- Does not start or end with a hyphen or underscore.
+- Contains no consecutive hyphens (`--`).
+- **Exactly matches** the parent folder name.
+
+### `description` (required)
+- Present and non-empty.
+- 1–1024 characters in length.
+- Clearly describes **BOTH** what the skill does **AND** when an agent should trigger or use it.
+- Contains specific trigger keywords and scenarios that an autonomous agent can match against.
+- Must not be vague (e.g., "helps with code" fails; "use when asked to audit Python code for security vulnerabilities" passes).
+
+### Optional Fields
+- `license`: Should be present if the skill is intended to be shared, distributed, or published.
+- `compatibility`: Only included if the skill has real, specific environment or platform requirements (e.g., OS, tool binaries).
+- `metadata`: For production skills, must include at least `author` and `version`.
+- `allowed-tools`: List of tools scoped strictly to the minimum required permissions (favoring read-only tools where possible).
+
+---
+
+## Step 3 — Directory and File Organization
+
+Evaluate folder organization and file placement:
+
+- `scripts/`: Must contain only runnable utility scripts or executable helpers — no documentation, raw data, or templates.
+- `references/`: Must contain supplementary documentation, detailed specifications, or reference guides — no runnable execution logic.
+- `assets/`: Must contain static resources, templates, images, or boilerplate files — no instructions or core logic.
+- **Purpose Check**: Verify no file is placed in an incorrect directory (e.g., core instructions buried in `assets/` or scripts in `references/`).
+- **Path References**: All file paths referenced in `SKILL.md` must use relative paths from the skill root.
+- **Reference Depth**: No deeply nested reference chains (maximum one level deep; e.g., `SKILL.md` may link to `references/doc.md`, but `references/doc.md` must not require loading further sub-references).
+
+> [!WARNING]
+> If a file or resource is placed in the wrong directory or violates path reference rules, record a **MEDIUM** finding.
+
+---
+
+## Step 4 — Progressive Disclosure Compliance
+
+Audit the skill for adherence to progressive disclosure principles:
+
+- **Line Limit**: The `SKILL.md` body must remain well under 500 lines.
+- **Core Visibility**: Core operational instructions must reside in `SKILL.md`, not hidden inside reference files.
+- **Conditional Loading**: Files in `references/` must only be loaded conditionally. `SKILL.md` must explicitly define **WHEN** and under what specific conditions an agent should read each reference file.
+- **No Unconditional Loading**: `SKILL.md` must never instruct the agent to unconditionally read all reference files upon skill activation.
+- **Trigger Clarity**: Generic instructions such as *"see references/ for details"* without explicit trigger conditions result in a **MEDIUM** finding.
+
+> **Conditional Trigger**: Read `skills/architecture-reviewer/references/spec-compliance.md` if any progressive disclosure violations, frontmatter ambiguities, or structural discrepancies are found and require detailed ruling against the agentskills.io specification.
+
+---
+
+## Step 5 — Architecture Rationale and Delegation Design
+
+### Model or Agent Selection Rationale
+Each agent or skill within the architecture must clearly justify its design:
+- What is its single, focused responsibility?
+- Why is it designed as a separate entity rather than merged with another skill or agent?
+- What specific class of task is it optimized for (e.g., orchestration, auditing, scoring, extraction, validation)?
+- If a specialized or higher-capacity model is specified, what complexity justifies it?
+
+> [!WARNING]
+> Record a **HIGH** finding if architecture rationale is missing, unstated, or vague.
+
+### Multi-Agent Delegation Validity
+When evaluating multi-agent systems or complex workflows, verify delegation validity:
+- **Valid Orchestration**: A single orchestrator assigns tasks; specialists execute strictly within their domain; structured results return upward.
+- **Non-Overlapping Boundaries**: Each agent maintains a distinct, non-overlapping responsibility.
+- **Directional Flow**: Task execution flows directionally without circular dependencies.
+- **No Duplication**: No two agents perform identical or competing functions.
+
+> **Conditional Trigger**: Read `skills/architecture-reviewer/references/delegation-patterns.md` when evaluating multi-agent architectures, auditing complex multi-agent workflows, or diagnosing suspected circular or duplicate delegation patterns.
+
+> [!CAUTION]
+> Record a **CRITICAL** finding if:
+> - Two agents claim the same responsibility.
+> - Delegation patterns are circular (e.g., Agent A → Agent B → Agent A).
+> - An agent receives no clear input specification or produces no defined output.
+
+### ADLC Evidence Check
+A production-grade skill must demonstrate Agent Development Lifecycle (ADLC) rigor:
+- Clear problem statement and scope definition.
+- Explicit agent input and output contracts.
+- Anticipated failure modes and error-handling strategies.
+- Defined evaluation criteria or success metrics.
+
+> [!WARNING]
+> Record a **MEDIUM** finding if ADLC design evidence is absent in a production-level skill.
+
+---
+
+## Step 6 — JSON Output
+
+When concluding the architecture — **ALWAYS** return the JSON structure directly to the caller — do NOT write it to disk.
+
+```json
+{
+  "agent": "ArchitectReview",
+  "version": "1.0.0",
+  "target": "<skill-name>",
+  "timestamp": "<ISO8601>",
+  "summary": {
+    "total_findings": 0,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "info": 0
+  },
+  "dimensions": {
+    "frontmatter": { "score": 0, "max": 20, "findings": [] },
+    "structure": { "score": 0, "max": 20, "findings": [] },
+    "disclosure": { "score": 0, "max": 20, "findings": [] },
+    "architecture": { "score": 0, "max": 20, "findings": [] }
+  },
+  "top_gaps": [],
+  "top_fixes": [],
+  "recommendation": "<approve | revise and resubmit | block>"
+}
+```
+
+### Scoring Rules
+Each dimension starts at 20 points. Deduct per finding:
+- CRITICAL: −10
+- HIGH: −6
+- MEDIUM: −3
+- LOW: −1
+- INFO: 0
+
+Floor is 0 per dimension. Total raw score = sum of 4 dimensions (0–80).
+[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './skills/readiness-scorer/SKILL.md'}`
+responded: [{'text': 'Now let me check the tools module and skill files:', 'type': 'text', 'index': 0}, {'id': 'toolu_01EQmcepZnpogKejT61y8XGM', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 1, 'partial_json': '{"query": "tools.py", "directory": "."}'}, {'id': 'toolu_01NkeMLSvVpMiKgNaeiboAHT', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 2, 'partial_json': '{"path": "./skills/code-auditor/SKILL.md"}'}, {'id': 'toolu_01361jfj13KitspwswK2NV2v', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 3, 'partial_json': '{"path": "./skills/architecture-reviewer/SKILL.md"}'}, {'id': 'toolu_01QUyp1a2RtwJBr2GoN7t2ne', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 4, 'partial_json': '{"path": "./skills/readiness-scorer/SKILL.md"}'}]
+
+[0m[36;1m[1;3m---
+name: readiness-scorer
+description: >
+  Aggregates verdicts from CodeSentinel and ArchitectReview into a 0–100
+  enterprise readiness score with sub-scores and top-3 gaps. Use when asked
+  to score overall readiness, produce a final readiness report, or combine
+  audit results into a single actionable verdict. Always runs last in the
+  pipeline — after code audit and architecture review are complete.
+license: MIT
+metadata:
+  author: Wreckcheck
+  version: "1.0.0"
+allowed-tools: Read
+---
+
+# ReadinessScorer
+
+Aggregate sub-agent outputs into a final 0–100 readiness score. Always wait for **BOTH** CodeSentinel and ArchitectReview outputs before scoring.
+
+---
+
+## Inputs Required
+
+Before scoring, confirm both of the following are available in the context:
+- [ ] **CodeSentinel output** — contains PASS / WARN / FAIL verdict + findings list.
+- [ ] **ArchitectReview output** — contains PASS / WARN / FAIL verdict + findings list.
+
+> [!IMPORTANT]
+> If either input is missing or incomplete, immediately return:
+> `"Scoring blocked — awaiting [missing agent] output."`
+> Do not attempt to calculate a score with partial inputs.
+
+---
+
+## Scoring Formula Overview
+
+Readiness scoring starts at a base baseline of **100 points** for each sub-category. Points are deducted based on the severity and source of each finding.
+
+### Sub-Scores
+Calculate two sub-scores separately before combining:
+1. **Security Score (from CodeSentinel)**: Starts at 100. Deduct points for CodeSentinel findings. Weight: **60%**.
+2. **Architecture Score (from ArchitectReview)**: Starts at 100. Deduct points for ArchitectReview findings. Weight: **40%**.
+
+### Final Score Formula
+$$\text{Final Score} = (\text{Security Score} \times 0.60) + (\text{Architecture Score} \times 0.40)$$
+
+> **Conditional Trigger**: Read `skills/readiness-scorer/references/scoring-formula.md` when executing point deductions, verifying deduction point tables per severity level, resolving scoring disputes, or mapping the final numeric score to its Readiness Tier label.
+
+---
+
+## Override and Disable Rules Overview
+
+Certain project contexts or environment settings waive or downgrade specific audit checks. When the Scout agent provides context flags (e.g., `internal-only`, `no-external-deps`, `eval-harness-planned`, or `observability-waived`), scoring deductions must be adjusted accordingly.
+
+> **Conditional Trigger**: Read `skills/readiness-scorer/references/override-policy.md` when Scout context flags are present in the pipeline or if a scoring dispute arises regarding check applicability and point overrides.
+
+---
+
+## Critical Scoring Gotchas
+
+Apply the following critical constraints during score evaluation:
+
+- **PASS does not mean 100**: A PASS verdict from CodeSentinel does not guarantee a high Security Score. PASS simply indicates zero CRITICAL findings; LOW and MEDIUM findings still deduct points.
+- **Single FAIL Cap**: If CodeSentinel returns FAIL, the Final Score is strictly capped at **49** regardless of how well the Architecture Score performs.
+- **Double FAIL Floor**: If both agents return FAIL, output the report- **ALWAYS** return the JSON structure directly to the caller — do NOT write it to disk.
+- **Precision & Rounding**: Do not round sub-scores during intermediate calculations. Carry two decimal places through the weighted formula, then round the Final Score to the nearest integer.
+- **Top-3 Gaps Sorting**: Top-3 gaps must be sorted strictly by **point impact** (highest deduction first), not by severity label. A cluster of MEDIUMs or multiple warnings can outrank a single HIGH depending on adjusted point deductions.
+
+---
+
+## Output Format
+
+Generate the final evaluation using the exact structure below:
+
+```markdown
+══════════════════════════════════════════════════════
+ReadinessScorer Report: <project-name>
+══════════════════════════════════════════════════════
+Final Score: [0–100] — <Tier Label>
+Security Score: [0–100] (weight: 60%)
+Architecture Score: [0–100] (weight: 40%)
+Total Findings: <n> across both agents
+══════════════════════════════════════════════════════
+
+Score Breakdown:
+
+CodeSentinel Input:
+Verdict: PASS / WARN / FAIL
+Deductions: -<n> pts (<finding count> findings)
+
+ArchitectReview Input:
+Verdict: PASS / WARN / FAIL
+Deductions: -<n> pts (<finding count> findings)
+
+──────────────────────────────────────────────────────
+Top-3 Gaps (highest-impact items to fix first):
+
+1. [SEVERITY] <finding title> — <which agent> — -<pts> impact
+2. [SEVERITY] <finding title> — <which agent> — -<pts> impact
+3. [SEVERITY] <finding title> — <which agent> — -<pts> impact
+
+──────────────────────────────────────────────────────
+Summary: <two sentences — overall posture + biggest risk>
+
+Recommendation:
+✅ Approve / ⚠️ Approve with conditions / 🚨 Block
+
+Conditions (if any):
+- <specific item that must be fixed before deploy>
+══════════════════════════════════════════════════════
+```
+[0m[32;1m[1;3m
+Invoking: `search_files` with `{'query': 'def read_file', 'directory': '.'}`
+responded: [{'text': 'Now let me search for the tools.py file and check for any additional agent code:', 'type': 'text', 'index': 0}, {'id': 'toolu_01EVhCoWqcXWMv5US66ATQJA', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 1, 'partial_json': '{"query": "def read_file", "directory": "."}'}, {'id': 'toolu_01JRwC2EcQFy9gTMVFYoUfdt', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 2, 'partial_json': '{"query": "def fetch_repo_files", "directory": "."}'}]
+
+[0m[33;1m[1;3m./tools.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/metadata.py
+./venv/lib/python3.9/site-packages/anthropic/_files.py[0m[32;1m[1;3m
+Invoking: `search_files` with `{'query': 'def fetch_repo_files', 'directory': '.'}`
+responded: [{'text': 'Now let me search for the tools.py file and check for any additional agent code:', 'type': 'text', 'index': 0}, {'id': 'toolu_01EVhCoWqcXWMv5US66ATQJA', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 1, 'partial_json': '{"query": "def read_file", "directory": "."}'}, {'id': 'toolu_01JRwC2EcQFy9gTMVFYoUfdt', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 2, 'partial_json': '{"query": "def fetch_repo_files", "directory": "."}'}]
+
+[0m[33;1m[1;3m./tools.py[0m[32;1m[1;3m
+Invoking: `read_file` with `{'path': './tools.py'}`
+responded: [{'id': 'toolu_01BZKKjF7Gwhe5BMtnGbk9Mb', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'read_file', 'type': 'tool_use', 'index': 0, 'partial_json': '{"path": "./tools.py"}'}]
+
+[0m[36;1m[1;3mimport requests
+import os
+import json
+from langchain_core.tools import tool
+
+@tool
+def fetch_repo_files(repo_url: str) -> str:
+    """
+    Fetches key files from a public GitHub repo via raw API.
+    Returns concatenated file contents as a single string.
+    """
+    # Convert https://github.com/user/repo → raw API calls
+    if repo_url.endswith(".git"):
+        repo_url = repo_url[:-4]
+    base = repo_url.replace("https://github.com/", "https://api.github.com/repos/")
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    target_files = ["README.md", "SKILL.md", "main.py", "app.py",
+                    "requirements.txt", "package.json", ".env.example"]
+    contents = []
+    for f in target_files:
+        try:
+            r = requests.get(f"{base}/contents/{f}", headers=headers, timeout=5)
+            if r.status_code == 200:
+                import base64
+                data = r.json()
+                decoded = base64.b64decode(data["content"]).decode("utf-8", errors="ignore")
+                contents.append(f"=== {f} ===\n{decoded}")
+            else:
+                contents.append(f"=== {f} ===\nNOT FOUND (HTTP {r.status_code})")
+        except Exception as e:
+            contents.append(f"=== {f} ===\nERROR: {str(e)}")
+    result = "\n\n".join(contents)
+    os.makedirs("./workspace", exist_ok=True)
+    with open("./workspace/repo_contents.txt", "w") as out:
+        out.write(result)
+    return result
+
+@tool
+def read_file(path: str) -> str:
+    """Read a file from the shared workspace."""
+    try:
+        with open(path, "r") as f:
+            return f.read()
+    except Exception as e:
+        return f"Error reading file: {str(e)}"
+
+@tool
+def write_file(path: str, content: str) -> str:
+    """Write content to the shared workspace."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+        return f"Written to {path}"
+    except Exception as e:
+        return f"Error writing file: {str(e)}"
+
+@tool
+def search_files(query: str, directory: str = ".") -> str:
+    """Search for a string in files within a directory."""
+    results = []
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(('.py', '.md', '.txt', '.json', '.js', '.ts')):
+                filepath = os.path.join(root, file)
+                try:
+                    with open(filepath, 'r', errors='ignore') as f:
+                        if query in f.read():
+                            results.append(filepath)
+                except Exception:
+                    pass
+    return "\n".join(results) if results else "No matches found."
+[0m[32;1m[1;3m
+Invoking: `search_files` with `{'query': 'f"', 'directory': './agents'}`
+responded: [{'text': 'Perfect! Now I have a comprehensive understanding of the codebase. Let me conduct the HarnessGuard audit systematically across all four dimensions.\n\n## STEP 1: SECURITY SCAN\n\nLet me check for prompt injection vulnerabilities:', 'type': 'text', 'index': 0}, {'id': 'toolu_017LbcU5ZLQoegcA9panKSgQ', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 1, 'partial_json': '{"query": "f\\"", "directory": "./agents"}'}, {'id': 'toolu_011W5krPULrLhnXkma7gfvdt', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 2, 'partial_json': '{"query": "system_prompt", "directory": "./agents"}'}, {'id': 'toolu_012ApRomfmYkeXA1ut5pNjTe', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 3, 'partial_json': '{"query": "eval", "directory": "."}'}, {'id': 'toolu_01B6q4YJbbEhoDqjiRPuuXJt', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 4, 'partial_json': '{"query": "exec", "directory": "."}'}]
+
+[0m[33;1m[1;3mNo matches found.[0m[32;1m[1;3m
+Invoking: `search_files` with `{'query': 'system_prompt', 'directory': './agents'}`
+responded: [{'text': 'Perfect! Now I have a comprehensive understanding of the codebase. Let me conduct the HarnessGuard audit systematically across all four dimensions.\n\n## STEP 1: SECURITY SCAN\n\nLet me check for prompt injection vulnerabilities:', 'type': 'text', 'index': 0}, {'id': 'toolu_017LbcU5ZLQoegcA9panKSgQ', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 1, 'partial_json': '{"query": "f\\"", "directory": "./agents"}'}, {'id': 'toolu_011W5krPULrLhnXkma7gfvdt', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 2, 'partial_json': '{"query": "system_prompt", "directory": "./agents"}'}, {'id': 'toolu_012ApRomfmYkeXA1ut5pNjTe', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 3, 'partial_json': '{"query": "eval", "directory": "."}'}, {'id': 'toolu_01B6q4YJbbEhoDqjiRPuuXJt', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 4, 'partial_json': '{"query": "exec", "directory": "."}'}]
+
+[0m[33;1m[1;3m./agents/code_sentinel.py
+./agents/arch_reviewer.py
+./agents/readiness_scorer.py
+./agents/harness_guard.py[0m[32;1m[1;3m
+Invoking: `search_files` with `{'query': 'eval', 'directory': '.'}`
+responded: [{'text': 'Perfect! Now I have a comprehensive understanding of the codebase. Let me conduct the HarnessGuard audit systematically across all four dimensions.\n\n## STEP 1: SECURITY SCAN\n\nLet me check for prompt injection vulnerabilities:', 'type': 'text', 'index': 0}, {'id': 'toolu_017LbcU5ZLQoegcA9panKSgQ', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 1, 'partial_json': '{"query": "f\\"", "directory": "./agents"}'}, {'id': 'toolu_011W5krPULrLhnXkma7gfvdt', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 2, 'partial_json': '{"query": "system_prompt", "directory": "./agents"}'}, {'id': 'toolu_012ApRomfmYkeXA1ut5pNjTe', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 3, 'partial_json': '{"query": "eval", "directory": "."}'}, {'id': 'toolu_01B6q4YJbbEhoDqjiRPuuXJt', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 4, 'partial_json': '{"query": "exec", "directory": "."}'}]
+
+[0m[33;1m[1;3m./reference.md
+./progress.md
+./readme.md
+./workspace/repo_contents.txt
+./skills/architecture-reviewer/SKILL.md
+./skills/architecture-reviewer/references/delegation-patterns.md
+./skills/architecture-reviewer/references/spec-compliance.md
+./skills/code-auditor/SKILL.md
+./skills/code-auditor/references/output-template.md
+./skills/code-auditor/references/severity-levels.md
+./skills/code-auditor/references/hygiene-checklist.md
+./skills/harness-guard/SKILL.md
+./skills/harness-guard/references/observability-checklist.md
+./skills/harness-guard/references/prompt-injection-checks.md
+./skills/readiness-scorer/SKILL.md
+./skills/readiness-scorer/references/override-policy.md
+./venv/lib/python3.9/site-packages/typing_extensions.py
+./venv/lib/python3.9/site-packages/packaging/tags.py
+./venv/lib/python3.9/site-packages/packaging/_parser.py
+./venv/lib/python3.9/site-packages/packaging/markers.py
+./venv/lib/python3.9/site-packages/packaging/licenses/__init__.py
+./venv/lib/python3.9/site-packages/langsmith/client.py
+./venv/lib/python3.9/site-packages/langsmith/__init__.py
+./venv/lib/python3.9/site-packages/langsmith/schemas.py
+./venv/lib/python3.9/site-packages/langsmith/utils.py
+./venv/lib/python3.9/site-packages/langsmith/run_helpers.py
+./venv/lib/python3.9/site-packages/langsmith/_expect.py
+./venv/lib/python3.9/site-packages/langsmith/beta/_evals.py
+./venv/lib/python3.9/site-packages/langsmith/beta/__init__.py
+./venv/lib/python3.9/site-packages/langsmith/_internal/_edit_distance.py
+./venv/lib/python3.9/site-packages/langsmith/_internal/_embedding_distance.py
+./venv/lib/python3.9/site-packages/langsmith/testing/_internal.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/llm_evaluator.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/string_evaluator.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/__init__.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/_arunner.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/_runner.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/evaluator.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/integrations/__init__.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/integrations/_langchain.py
+./venv/lib/python3.9/site-packages/langchain/retrievers/parent_document_retriever.py
+./venv/lib/python3.9/site-packages/langchain/retrievers/re_phraser.py
+./venv/lib/python3.9/site-packages/langchain/retrievers/bedrock.py
+./venv/lib/python3.9/site-packages/langchain/memory/vectorstore_token_buffer_memory.py
+./venv/lib/python3.9/site-packages/langchain/callbacks/tracers/evaluation.py
+./venv/lib/python3.9/site-packages/langchain/smith/__init__.py
+./venv/lib/python3.9/site-packages/langchain/smith/evaluation/config.py
+./venv/lib/python3.9/site-packages/langchain/smith/evaluation/runner_utils.py
+./venv/lib/python3.9/site-packages/langchain/smith/evaluation/__init__.py
+./venv/lib/python3.9/site-packages/langchain/smith/evaluation/string_run_evaluator.py
+./venv/lib/python3.9/site-packages/langchain/agents/agent_toolkits/__init__.py
+./venv/lib/python3.9/site-packages/langchain/agents/agent_toolkits/conversational_retrieval/openai_functions.py
+./venv/lib/python3.9/site-packages/langchain/vectorstores/elasticsearch.py
+./venv/lib/python3.9/site-packages/langchain/schema/callbacks/tracers/evaluation.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/loading.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/__init__.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/schema.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/string_distance/__init__.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/string_distance/base.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/agents/trajectory_eval_chain.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/agents/__init__.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/agents/trajectory_eval_prompt.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/qa/eval_chain.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/qa/generate_chain.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/qa/__init__.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/scoring/eval_chain.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/scoring/__init__.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/scoring/prompt.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/comparison/eval_chain.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/comparison/__init__.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/comparison/prompt.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/parsing/json_distance.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/parsing/json_schema.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/parsing/base.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/criteria/eval_chain.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/criteria/__init__.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/criteria/prompt.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/regex_match/base.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/exact_match/base.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/embedding_distance/__init__.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/embedding_distance/base.py
+./venv/lib/python3.9/site-packages/langchain/chains/loading.py
+./venv/lib/python3.9/site-packages/langchain/chains/__init__.py
+./venv/lib/python3.9/site-packages/langchain/chains/retrieval.py
+./venv/lib/python3.9/site-packages/langchain/chains/history_aware_retriever.py
+./venv/lib/python3.9/site-packages/langchain/chains/question_answering/chain.py
+./venv/lib/python3.9/site-packages/langchain/chains/openai_functions/qa_with_structure.py
+./venv/lib/python3.9/site-packages/langchain/chains/retrieval_qa/base.py
+./venv/lib/python3.9/site-packages/langchain/chains/qa_with_sources/loading.py
+./venv/lib/python3.9/site-packages/langchain/chains/qa_with_sources/vector_db.py
+./venv/lib/python3.9/site-packages/langchain/chains/qa_with_sources/retrieval.py
+./venv/lib/python3.9/site-packages/langchain/chains/qa_with_sources/base.py
+./venv/lib/python3.9/site-packages/langchain/chains/natbot/crawler.py
+./venv/lib/python3.9/site-packages/langchain/chains/llm_math/prompt.py
+./venv/lib/python3.9/site-packages/langchain/chains/llm_math/base.py
+./venv/lib/python3.9/site-packages/langchain/chains/conversational_retrieval/base.py
+./venv/lib/python3.9/site-packages/langchain/chains/flare/base.py
+./venv/lib/python3.9/site-packages/langchain/chains/router/multi_retrieval_prompt.py
+./venv/lib/python3.9/site-packages/langchain/chains/router/__init__.py
+./venv/lib/python3.9/site-packages/langchain/chains/router/multi_retrieval_qa.py
+./venv/lib/python3.9/site-packages/langchain/indexes/vectorstore.py
+./venv/lib/python3.9/site-packages/sqlalchemy/util/compat.py
+./venv/lib/python3.9/site-packages/sqlalchemy/util/langhelpers.py
+./venv/lib/python3.9/site-packages/sqlalchemy/util/typing.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/orderinglist.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/hybrid.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/associationproxy.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/exclusions.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/requirements.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/plugin/pytestplugin.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_types.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/oracle/dictionary.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/interfaces.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/decl_base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/persistence.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/query.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/util.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/events.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/mapper.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/clsregistry.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/exc.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/_orm_constructors.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/bulk_persistence.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/evaluator.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/relationships.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/interfaces.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/create.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/cursor.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/annotation.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/compiler.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/elements.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/_elements_constructors.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/sqltypes.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/operators.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/selectable.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/coercions.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/type_api.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/lambdas.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/_orm_types.py
+./venv/lib/python3.9/site-packages/langchain_core/retrievers.py
+./venv/lib/python3.9/site-packages/langchain_core/tools/retriever.py
+./venv/lib/python3.9/site-packages/langchain_core/runnables/graph_mermaid.py
+./venv/lib/python3.9/site-packages/langchain_core/runnables/branch.py
+./venv/lib/python3.9/site-packages/langchain_core/vectorstores/base.py
+./venv/lib/python3.9/site-packages/langchain_core/load/serializable.py
+./venv/lib/python3.9/site-packages/langchain_core/tracers/run_collector.py
+./venv/lib/python3.9/site-packages/langchain_core/tracers/evaluation.py
+./venv/lib/python3.9/site-packages/langchain_core/tracers/__init__.py
+./venv/lib/python3.9/site-packages/langchain_core/tracers/core.py
+./venv/lib/python3.9/site-packages/langchain_core/tracers/base.py
+./venv/lib/python3.9/site-packages/requests/sessions.py
+./venv/lib/python3.9/site-packages/anyio/_backends/_trio.py
+./venv/lib/python3.9/site-packages/anyio/_backends/_asyncio.py
+./venv/lib/python3.9/site-packages/pip/_internal/cli/parser.py
+./venv/lib/python3.9/site-packages/pip/_internal/operations/check.py
+./venv/lib/python3.9/site-packages/pip/_internal/req/req_install.py
+./venv/lib/python3.9/site-packages/pip/_internal/req/req_set.py
+./venv/lib/python3.9/site-packages/pip/_internal/resolution/legacy/resolver.py
+./venv/lib/python3.9/site-packages/pip/_internal/vcs/subversion.py
+./venv/lib/python3.9/site-packages/pip/_internal/index/package_finder.py
+./venv/lib/python3.9/site-packages/pip/_internal/commands/list.py
+./venv/lib/python3.9/site-packages/pip/_internal/commands/completion.py
+./venv/lib/python3.9/site-packages/pip/_vendor/pyparsing.py
+./venv/lib/python3.9/site-packages/pip/_vendor/packaging/tags.py
+./venv/lib/python3.9/site-packages/pip/_vendor/packaging/markers.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/metadata.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/index.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/markers.py
+./venv/lib/python3.9/site-packages/pip/_vendor/cachecontrol/controller.py
+./venv/lib/python3.9/site-packages/pip/_vendor/requests/sessions.py
+./venv/lib/python3.9/site-packages/pip/_vendor/html5lib/_inputstream.py
+./venv/lib/python3.9/site-packages/pip/_vendor/html5lib/constants.py
+./venv/lib/python3.9/site-packages/pip/_vendor/html5lib/_utils.py
+./venv/lib/python3.9/site-packages/pip/_vendor/html5lib/treewalkers/etree_lxml.py
+./venv/lib/python3.9/site-packages/pip/_vendor/urllib3/contrib/securetransport.py
+./venv/lib/python3.9/site-packages/pip/_vendor/pkg_resources/__init__.py
+./venv/lib/python3.9/site-packages/anthropic/_base_client.py
+./venv/lib/python3.9/site-packages/anthropic/_streaming.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_session.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_outcome_evaluation_resource.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_webhook_event_data.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_webhook_session_outcome_evaluation_ended_event_data.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/__init__.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_stream_session_events.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_agent_tool_use_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_span_outcome_evaluation_start_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_agent_mcp_tool_use_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_stream_session_thread_events.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/__init__.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_span_outcome_evaluation_end_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_session_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_span_outcome_evaluation_ongoing_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_user_define_outcome_event.py
+./venv/lib/python3.9/site-packages/anthropic/lib/tools/_beta_session_runner.py
+./venv/lib/python3.9/site-packages/anthropic/lib/tools/agent_toolset.py
+./venv/lib/python3.9/site-packages/setuptools/package_index.py
+./venv/lib/python3.9/site-packages/setuptools/config.py
+./venv/lib/python3.9/site-packages/setuptools/_vendor/pyparsing.py
+./venv/lib/python3.9/site-packages/setuptools/_vendor/packaging/markers.py
+./venv/lib/python3.9/site-packages/setuptools/_vendor/more_itertools/recipes.py
+./venv/lib/python3.9/site-packages/setuptools/command/test.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/bdist_rpm.py
+./venv/lib/python3.9/site-packages/pkg_resources/__init__.py
+./venv/lib/python3.9/site-packages/pkg_resources/_vendor/pyparsing.py
+./venv/lib/python3.9/site-packages/pkg_resources/_vendor/packaging/markers.py
+./venv/lib/python3.9/site-packages/pydantic/config.py
+./venv/lib/python3.9/site-packages/pydantic/fields.py
+./venv/lib/python3.9/site-packages/pydantic/mypy.py
+./venv/lib/python3.9/site-packages/pydantic/types.py
+./venv/lib/python3.9/site-packages/pydantic/json_schema.py
+./venv/lib/python3.9/site-packages/pydantic/_migration.py
+./venv/lib/python3.9/site-packages/pydantic/validate_call_decorator.py
+./venv/lib/python3.9/site-packages/pydantic/errors.py
+./venv/lib/python3.9/site-packages/pydantic/dataclasses.py
+./venv/lib/python3.9/site-packages/pydantic/main.py
+./venv/lib/python3.9/site-packages/pydantic/v1/utils.py
+./venv/lib/python3.9/site-packages/pydantic/v1/typing.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_validate_call.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_typing_extra.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_namespace_utils.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_model_construction.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_signature.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_generate_schema.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_decorators.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_fields.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_config.py
+./venv/lib/python3.9/site-packages/zstandard/backend_cffi.py
+./venv/lib/python3.9/site-packages/uuid_utils-0.15.0.dist-info/sboms/uuid-utils.cyclonedx.json
+./venv/lib/python3.9/site-packages/pydantic_core/core_schema.py[0m[32;1m[1;3m
+Invoking: `search_files` with `{'query': 'exec', 'directory': '.'}`
+responded: [{'text': 'Perfect! Now I have a comprehensive understanding of the codebase. Let me conduct the HarnessGuard audit systematically across all four dimensions.\n\n## STEP 1: SECURITY SCAN\n\nLet me check for prompt injection vulnerabilities:', 'type': 'text', 'index': 0}, {'id': 'toolu_017LbcU5ZLQoegcA9panKSgQ', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 1, 'partial_json': '{"query": "f\\"", "directory": "./agents"}'}, {'id': 'toolu_011W5krPULrLhnXkma7gfvdt', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 2, 'partial_json': '{"query": "system_prompt", "directory": "./agents"}'}, {'id': 'toolu_012ApRomfmYkeXA1ut5pNjTe', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 3, 'partial_json': '{"query": "eval", "directory": "."}'}, {'id': 'toolu_01B6q4YJbbEhoDqjiRPuuXJt', 'caller': {'type': 'direct'}, 'input': {}, 'name': 'search_files', 'type': 'tool_use', 'index': 4, 'partial_json': '{"query": "exec", "directory": "."}'}]
+
+[0m[33;1m[1;3m./progress.md
+./deepagents.py
+./workspace/repo_contents.txt
+./skills/architecture-reviewer/SKILL.md
+./skills/architecture-reviewer/references/delegation-patterns.md
+./skills/architecture-reviewer/references/spec-compliance.md
+./skills/code-auditor/references/severity-levels.md
+./skills/code-auditor/references/hygiene-checklist.md
+./skills/harness-guard/references/prompt-injection-checks.md
+./skills/harness-guard/references/reliability-checks.md
+./skills/harness-guard/references/cost-controls.md
+./skills/readiness-scorer/SKILL.md
+./venv/lib/python3.9/site-packages/jsonpatch.py
+./venv/lib/python3.9/site-packages/typing_extensions.py
+./venv/lib/python3.9/site-packages/async_timeout/__init__.py
+./venv/lib/python3.9/site-packages/packaging/tags.py
+./venv/lib/python3.9/site-packages/packaging/_musllinux.py
+./venv/lib/python3.9/site-packages/packaging/_manylinux.py
+./venv/lib/python3.9/site-packages/packaging/_elffile.py
+./venv/lib/python3.9/site-packages/langsmith/client.py
+./venv/lib/python3.9/site-packages/langsmith/schemas.py
+./venv/lib/python3.9/site-packages/langsmith/utils.py
+./venv/lib/python3.9/site-packages/langsmith/_expect.py
+./venv/lib/python3.9/site-packages/langsmith/beta/_evals.py
+./venv/lib/python3.9/site-packages/langsmith/_internal/_background_thread.py
+./venv/lib/python3.9/site-packages/langsmith/_internal/_aiter.py
+./venv/lib/python3.9/site-packages/langsmith/_internal/otel/_otel_exporter.py
+./venv/lib/python3.9/site-packages/langsmith/env/_runtime_env.py
+./venv/lib/python3.9/site-packages/langsmith/env/_git.py
+./venv/lib/python3.9/site-packages/langsmith/integrations/claude_agent_sdk/__init__.py
+./venv/lib/python3.9/site-packages/langsmith/testing/_internal.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/_arunner.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/_runner.py
+./venv/lib/python3.9/site-packages/langsmith/evaluation/evaluator.py
+./venv/lib/python3.9/site-packages/h11/_version.py
+./venv/lib/python3.9/site-packages/dotenv/cli.py
+./venv/lib/python3.9/site-packages/dotenv/__main__.py
+./venv/lib/python3.9/site-packages/langchain/hub.py
+./venv/lib/python3.9/site-packages/langchain/retrievers/self_query/base.py
+./venv/lib/python3.9/site-packages/langchain/memory/entity.py
+./venv/lib/python3.9/site-packages/langchain/callbacks/tracers/__init__.py
+./venv/lib/python3.9/site-packages/langchain/smith/evaluation/runner_utils.py
+./venv/lib/python3.9/site-packages/langchain/chat_models/base.py
+./venv/lib/python3.9/site-packages/langchain/agents/loading.py
+./venv/lib/python3.9/site-packages/langchain/agents/initialize.py
+./venv/lib/python3.9/site-packages/langchain/agents/agent.py
+./venv/lib/python3.9/site-packages/langchain/agents/agent_iterator.py
+./venv/lib/python3.9/site-packages/langchain/agents/self_ask_with_search/base.py
+./venv/lib/python3.9/site-packages/langchain/agents/openai_tools/base.py
+./venv/lib/python3.9/site-packages/langchain/agents/openai_functions_agent/base.py
+./venv/lib/python3.9/site-packages/langchain/agents/tool_calling_agent/base.py
+./venv/lib/python3.9/site-packages/langchain/agents/structured_chat/base.py
+./venv/lib/python3.9/site-packages/langchain/agents/json_chat/base.py
+./venv/lib/python3.9/site-packages/langchain/agents/xml/base.py
+./venv/lib/python3.9/site-packages/langchain/agents/openai_assistant/base.py
+./venv/lib/python3.9/site-packages/langchain/agents/agent_toolkits/conversational_retrieval/openai_functions.py
+./venv/lib/python3.9/site-packages/langchain/agents/agent_toolkits/vectorstore/base.py
+./venv/lib/python3.9/site-packages/langchain/agents/react/agent.py
+./venv/lib/python3.9/site-packages/langchain/storage/_lc_store.py
+./venv/lib/python3.9/site-packages/langchain/schema/runnable/config.py
+./venv/lib/python3.9/site-packages/langchain/evaluation/schema.py
+./venv/lib/python3.9/site-packages/langchain/chains/__init__.py
+./venv/lib/python3.9/site-packages/langchain/chains/base.py
+./venv/lib/python3.9/site-packages/langchain/chains/openai_functions/openapi.py
+./venv/lib/python3.9/site-packages/langchain/chains/natbot/base.py
+./venv/lib/python3.9/site-packages/langchain/chains/api/base.py
+./venv/lib/python3.9/site-packages/langchain/chains/llm_math/__init__.py
+./venv/lib/python3.9/site-packages/langchain/chains/llm_math/prompt.py
+./venv/lib/python3.9/site-packages/langchain/chains/llm_math/base.py
+./venv/lib/python3.9/site-packages/langchain/indexes/_sql_record_manager.py
+./venv/lib/python3.9/site-packages/distro/distro.py
+./venv/lib/python3.9/site-packages/tenacity/__init__.py
+./venv/lib/python3.9/site-packages/tenacity/nap.py
+./venv/lib/python3.9/site-packages/sqlalchemy/exc.py
+./venv/lib/python3.9/site-packages/sqlalchemy/connectors/asyncio.py
+./venv/lib/python3.9/site-packages/sqlalchemy/connectors/aioodbc.py
+./venv/lib/python3.9/site-packages/sqlalchemy/connectors/pyodbc.py
+./venv/lib/python3.9/site-packages/sqlalchemy/util/_concurrency_py3k.py
+./venv/lib/python3.9/site-packages/sqlalchemy/util/langhelpers.py
+./venv/lib/python3.9/site-packages/sqlalchemy/util/tool_support.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/compiler.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/baked.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/horizontal_shard.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/declarative/extensions.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/asyncio/scoping.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/asyncio/session.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/asyncio/result.py
+./venv/lib/python3.9/site-packages/sqlalchemy/ext/asyncio/engine.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/exclusions.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/engines.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/util.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/assertions.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/assertsql.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/provision.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/requirements.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/plugin/bootstrap.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/plugin/pytestplugin.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/fixtures/sql.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/fixtures/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_sequence.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_results.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_insert.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_select.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_deprecations.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_ddl.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_dialect.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_update_delete.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_reflection.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_rowcount.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_cte.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_types.py
+./venv/lib/python3.9/site-packages/sqlalchemy/testing/suite/test_unicode_ddl.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/_psycopg_common.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/psycopg.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/psycopg2.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/provision.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/pg8000.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/json.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/named_types.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/ext.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/postgresql/hstore.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/oracle/vector.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/oracle/oracledb.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/oracle/provision.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/oracle/cx_oracle.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/oracle/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/sqlite/pysqlcipher.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/sqlite/provision.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/sqlite/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/sqlite/pysqlite.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mysql/mysqlconnector.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mysql/asyncmy.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mysql/reflection.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mysql/mariadbconnector.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mysql/provision.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mysql/mysqldb.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mysql/pyodbc.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mysql/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mssql/pymssql.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mssql/provision.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mssql/aioodbc.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mssql/pyodbc.py
+./venv/lib/python3.9/site-packages/sqlalchemy/dialects/mssql/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/sync.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/interfaces.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/instrumentation.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/loading.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/persistence.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/query.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/attributes.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/strategies.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/strategy_options.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/util.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/events.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/mapper.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/scoping.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/session.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/writeonly.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/context.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/collections.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/_orm_constructors.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/dependency.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/bulk_persistence.py
+./venv/lib/python3.9/site-packages/sqlalchemy/orm/unitofwork.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/interfaces.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/characteristics.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/create.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/events.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/reflection.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/__init__.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/result.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/default.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/row.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/cursor.py
+./venv/lib/python3.9/site-packages/sqlalchemy/engine/mock.py
+./venv/lib/python3.9/site-packages/sqlalchemy/pool/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/event/attr.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/functions.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/ddl.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/compiler.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/traversals.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/cache_key.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/visitors.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/events.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/elements.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/_dml_constructors.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/_elements_constructors.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/sqltypes.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/operators.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/selectable.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/dml.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/coercions.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/base.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/type_api.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/crud.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/lambdas.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/schema.py
+./venv/lib/python3.9/site-packages/sqlalchemy/sql/_orm_types.py
+./venv/lib/python3.9/site-packages/langchain_core/caches.py
+./venv/lib/python3.9/site-packages/langchain_core/memory.py
+./venv/lib/python3.9/site-packages/langchain_core/retrievers.py
+./venv/lib/python3.9/site-packages/langchain_core/stores.py
+./venv/lib/python3.9/site-packages/langchain_core/agents.py
+./venv/lib/python3.9/site-packages/langchain_core/exceptions.py
+./venv/lib/python3.9/site-packages/langchain_core/chat_history.py
+./venv/lib/python3.9/site-packages/langchain_core/beta/runnables/context.py
+./venv/lib/python3.9/site-packages/langchain_core/language_models/chat_models.py
+./venv/lib/python3.9/site-packages/langchain_core/language_models/llms.py
+./venv/lib/python3.9/site-packages/langchain_core/language_models/base.py
+./venv/lib/python3.9/site-packages/langchain_core/tools/structured.py
+./venv/lib/python3.9/site-packages/langchain_core/tools/simple.py
+./venv/lib/python3.9/site-packages/langchain_core/tools/base.py
+./venv/lib/python3.9/site-packages/langchain_core/messages/tool.py
+./venv/lib/python3.9/site-packages/langchain_core/messages/function.py
+./venv/lib/python3.9/site-packages/langchain_core/embeddings/embeddings.py
+./venv/lib/python3.9/site-packages/langchain_core/example_selectors/base.py
+./venv/lib/python3.9/site-packages/langchain_core/callbacks/manager.py
+./venv/lib/python3.9/site-packages/langchain_core/runnables/graph_mermaid.py
+./venv/lib/python3.9/site-packages/langchain_core/runnables/config.py
+./venv/lib/python3.9/site-packages/langchain_core/runnables/configurable.py
+./venv/lib/python3.9/site-packages/langchain_core/runnables/__init__.py
+./venv/lib/python3.9/site-packages/langchain_core/runnables/router.py
+./venv/lib/python3.9/site-packages/langchain_core/runnables/passthrough.py
+./venv/lib/python3.9/site-packages/langchain_core/runnables/base.py
+./venv/lib/python3.9/site-packages/langchain_core/runnables/schema.py
+./venv/lib/python3.9/site-packages/langchain_core/vectorstores/base.py
+./venv/lib/python3.9/site-packages/langchain_core/load/load.py
+./venv/lib/python3.9/site-packages/langchain_core/output_parsers/transform.py
+./venv/lib/python3.9/site-packages/langchain_core/output_parsers/base.py
+./venv/lib/python3.9/site-packages/langchain_core/prompts/loading.py
+./venv/lib/python3.9/site-packages/langchain_core/prompts/prompt.py
+./venv/lib/python3.9/site-packages/langchain_core/prompts/string.py
+./venv/lib/python3.9/site-packages/langchain_core/prompts/image.py
+./venv/lib/python3.9/site-packages/langchain_core/document_loaders/base.py
+./venv/lib/python3.9/site-packages/langchain_core/documents/transformers.py
+./venv/lib/python3.9/site-packages/langchain_core/documents/compressor.py
+./venv/lib/python3.9/site-packages/langchain_core/indexing/base.py
+./venv/lib/python3.9/site-packages/langchain_core/tracers/evaluation.py
+./venv/lib/python3.9/site-packages/langchain_core/tracers/schemas.py
+./venv/lib/python3.9/site-packages/langchain_core/tracers/langchain.py
+./venv/lib/python3.9/site-packages/langchain_core/outputs/run_info.py
+./venv/lib/python3.9/site-packages/langchain_anthropic/chat_models.py
+./venv/lib/python3.9/site-packages/charset_normalizer/md.py
+./venv/lib/python3.9/site-packages/anyio/to_process.py
+./venv/lib/python3.9/site-packages/anyio/from_thread.py
+./venv/lib/python3.9/site-packages/anyio/to_interpreter.py
+./venv/lib/python3.9/site-packages/anyio/_backends/_asyncio.py
+./venv/lib/python3.9/site-packages/anyio/_core/_tempfile.py
+./venv/lib/python3.9/site-packages/anyio/_core/_subprocesses.py
+./venv/lib/python3.9/site-packages/pip/_internal/pyproject.py
+./venv/lib/python3.9/site-packages/pip/_internal/self_outdated_check.py
+./venv/lib/python3.9/site-packages/pip/_internal/build_env.py
+./venv/lib/python3.9/site-packages/pip/_internal/utils/misc.py
+./venv/lib/python3.9/site-packages/pip/_internal/utils/subprocess.py
+./venv/lib/python3.9/site-packages/pip/_internal/utils/setuptools_build.py
+./venv/lib/python3.9/site-packages/pip/_internal/utils/distutils_args.py
+./venv/lib/python3.9/site-packages/pip/_internal/utils/unpacking.py
+./venv/lib/python3.9/site-packages/pip/_internal/cli/base_command.py
+./venv/lib/python3.9/site-packages/pip/_internal/operations/install/wheel.py
+./venv/lib/python3.9/site-packages/pip/_internal/vcs/versioncontrol.py
+./venv/lib/python3.9/site-packages/pip/_internal/locations/__init__.py
+./venv/lib/python3.9/site-packages/pip/_internal/locations/_sysconfig.py
+./venv/lib/python3.9/site-packages/pip/_internal/locations/base.py
+./venv/lib/python3.9/site-packages/pip/_internal/commands/debug.py
+./venv/lib/python3.9/site-packages/pip/_internal/commands/install.py
+./venv/lib/python3.9/site-packages/pip/_vendor/six.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distro.py
+./venv/lib/python3.9/site-packages/pip/_vendor/pyparsing.py
+./venv/lib/python3.9/site-packages/pip/_vendor/packaging/_musllinux.py
+./venv/lib/python3.9/site-packages/pip/_vendor/packaging/_manylinux.py
+./venv/lib/python3.9/site-packages/pip/_vendor/msgpack/fallback.py
+./venv/lib/python3.9/site-packages/pip/_vendor/pep517/envbuild.py
+./venv/lib/python3.9/site-packages/pip/_vendor/pep517/wrappers.py
+./venv/lib/python3.9/site-packages/pip/_vendor/pep517/in_process/_in_process.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/compat.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/util.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/markers.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/scripts.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/wheel.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/_backport/shutil.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/_backport/tarfile.py
+./venv/lib/python3.9/site-packages/pip/_vendor/distlib/_backport/sysconfig.py
+./venv/lib/python3.9/site-packages/pip/_vendor/cachecontrol/filewrapper.py
+./venv/lib/python3.9/site-packages/pip/_vendor/tenacity/__init__.py
+./venv/lib/python3.9/site-packages/pip/_vendor/tenacity/nap.py
+./venv/lib/python3.9/site-packages/pip/_vendor/urllib3/packages/six.py
+./venv/lib/python3.9/site-packages/pip/_vendor/pkg_resources/__init__.py
+./venv/lib/python3.9/site-packages/sniffio/_version.py
+./venv/lib/python3.9/site-packages/anthropic/_base_client.py
+./venv/lib/python3.9/site-packages/anthropic/_request.py
+./venv/lib/python3.9/site-packages/anthropic/types/bash_code_execution_tool_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_output_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_result_error.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_20250825_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/tool_text_editor_20250124_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/raw_message_delta_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_result_error_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_20260521_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/parsed_message.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_result_block_content.py
+./venv/lib/python3.9/site-packages/anthropic/types/bash_code_execution_output_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_str_replace_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_create_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/content_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/server_tool_caller_20260120.py
+./venv/lib/python3.9/site-packages/anthropic/types/model_capabilities.py
+./venv/lib/python3.9/site-packages/anthropic/types/web_fetch_tool_20260209_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/server_tool_use_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_20250522_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/bash_code_execution_tool_result_error.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_tool_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/bash_code_execution_tool_result_error_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/tool_text_editor_20250429_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/__init__.py
+./venv/lib/python3.9/site-packages/anthropic/types/tool_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/message.py
+./venv/lib/python3.9/site-packages/anthropic/types/encrypted_code_execution_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_create_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/tool_union_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/encrypted_code_execution_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/container.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_tool_result_error_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/web_search_tool_20260209_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/anthropic_beta_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_result_error_code.py
+./venv/lib/python3.9/site-packages/anthropic/types/tool_text_editor_20250728_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/bash_code_execution_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/tool_search_tool_result_error_code.py
+./venv/lib/python3.9/site-packages/anthropic/types/web_search_tool_20250305_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/bash_code_execution_output_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/server_tool_caller_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/web_fetch_tool_20250910_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/bash_code_execution_tool_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_tool_result_error.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_20260120_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_output_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/tool_bash_20250124_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_tool_result_error_code.py
+./venv/lib/python3.9/site-packages/anthropic/types/message_count_tokens_tool_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/server_tool_caller.py
+./venv/lib/python3.9/site-packages/anthropic/types/bash_code_execution_tool_result_error_code.py
+./venv/lib/python3.9/site-packages/anthropic/types/server_tool_caller_20260120_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/tool_search_tool_regex_20251119_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_view_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/tool_search_tool_bm25_20251119_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/bash_code_execution_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/content_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/raw_content_block_start_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_tool_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_view_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_result_block_param_content_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/text_editor_code_execution_str_replace_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/server_tool_use_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/memory_tool_20250818_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/web_fetch_tool_20260309_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/code_execution_tool_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/message_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_deployment_run.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_mcp_toolset_default_config.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_server_tool_use_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_text_editor_code_execution_view_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_text_editor_code_execution_tool_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_result_error.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_server_tool_caller_20260120_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_result_error_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_computer_use_20250124_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_advisor_tool_20260301_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_bash_code_execution_tool_result_error_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_model_capabilities.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_20250522_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_agent_tool_config.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_mcp_tool_config.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_bash_code_execution_output_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_bash_20241022_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_agent_toolset20260401_bash_input.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_text_editor_20250728_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_search_tool_result_error.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_text_editor_code_execution_create_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_text_editor_code_execution_tool_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_user_tool_result_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_refusal_stop_details.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_search_tool_bm25_20251119_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_text_editor_code_execution_tool_result_error_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_output_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_mcp_toolset_default_config_params.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_20260521_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_message.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_web_fetch_tool_20260209_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_20250825_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_encrypted_code_execution_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_server_tool_caller_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_result_block_content.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_bash_code_execution_tool_result_error.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/__init__.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_always_ask_policy.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_bash_20250124_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_search_tool_result_error_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_bash_code_execution_tool_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_computer_use_20241022_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_text_editor_code_execution_create_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_always_ask_policy_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_custom_tool_params.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_bash_code_execution_tool_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_agent_toolset_default_config_params.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_web_search_tool_20260209_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_web_search_tool_20250305_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_text_editor_20250124_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/message_count_tokens_params.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_bash_code_execution_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_computer_use_20251124_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_raw_message_delta_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_mcp_tool_config_params.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/parsed_beta_message.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_text_editor_code_execution_tool_result_error.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_server_tool_caller.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_memory_tool_20250818_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_bash_code_execution_output_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_agent_tool_config_params.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_server_tool_use_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_web_fetch_tool_20250910_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_server_tool_caller_20260120.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_result_error_code.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_text_editor_code_execution_str_replace_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_advisor_tool_result_error_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_container.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_20260120_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_text_editor_20241022_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_text_editor_code_execution_str_replace_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_text_editor_code_execution_view_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_union_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_content_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_text_editor_20250429_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_result_block_param_content_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_output_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_advisor_tool_result_error.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_raw_content_block_start_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_bash_code_execution_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_managed_agents_agent_toolset_default_config.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_content_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_web_fetch_tool_20260309_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_encrypted_code_execution_result_block_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_tool_search_tool_regex_20251119_param.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/beta_code_execution_tool_result_block.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/environments/beta_self_hosted_work.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/environments/beta_session_work_data.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_user_interrupt_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_user_tool_result_event_params.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_session_thread.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_user_tool_confirmation_event_params.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_unknown_error.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_session_error_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_user_custom_tool_result_event_params.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_user_tool_confirmation_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_user_custom_tool_result_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_agent_mcp_tool_result_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_session_status_rescheduled_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_session_thread_status_running_event.py
+./venv/lib/python3.9/site-packages/anthropic/types/beta/sessions/beta_managed_agents_agent_tool_result_event.py
+./venv/lib/python3.9/site-packages/anthropic/resources/beta/sessions/events.py
+./venv/lib/python3.9/site-packages/anthropic/lib/tools/_beta_session_runner.py
+./venv/lib/python3.9/site-packages/anthropic/lib/tools/_beta_runner.py
+./venv/lib/python3.9/site-packages/anthropic/lib/tools/_beta_functions.py
+./venv/lib/python3.9/site-packages/anthropic/lib/tools/mcp.py
+./venv/lib/python3.9/site-packages/anthropic/lib/tools/agent_toolset.py
+./venv/lib/python3.9/site-packages/anthropic/lib/tools/_skills.py
+./venv/lib/python3.9/site-packages/anthropic/lib/tools/_beta_builtin_memory_tool.py
+./venv/lib/python3.9/site-packages/anthropic/lib/credentials/_providers.py
+./venv/lib/python3.9/site-packages/setuptools/depends.py
+./venv/lib/python3.9/site-packages/setuptools/installer.py
+./venv/lib/python3.9/site-packages/setuptools/sandbox.py
+./venv/lib/python3.9/site-packages/setuptools/launch.py
+./venv/lib/python3.9/site-packages/setuptools/build_meta.py
+./venv/lib/python3.9/site-packages/setuptools/msvc.py
+./venv/lib/python3.9/site-packages/setuptools/dist.py
+./venv/lib/python3.9/site-packages/setuptools/_vendor/pyparsing.py
+./venv/lib/python3.9/site-packages/setuptools/_vendor/packaging/tags.py
+./venv/lib/python3.9/site-packages/setuptools/_vendor/packaging/_typing.py
+./venv/lib/python3.9/site-packages/setuptools/_vendor/more_itertools/more.py
+./venv/lib/python3.9/site-packages/setuptools/command/bdist_egg.py
+./venv/lib/python3.9/site-packages/setuptools/command/build_ext.py
+./venv/lib/python3.9/site-packages/setuptools/command/easy_install.py
+./venv/lib/python3.9/site-packages/setuptools/command/install_scripts.py
+./venv/lib/python3.9/site-packages/setuptools/command/egg_info.py
+./venv/lib/python3.9/site-packages/setuptools/command/install_egg_info.py
+./venv/lib/python3.9/site-packages/setuptools/extern/__init__.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/_msvccompiler.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/unixccompiler.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/ccompiler.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/msvc9compiler.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/cmd.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/util.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/core.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/cygwinccompiler.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/spawn.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/msvccompiler.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/errors.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/sysconfig.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/dist.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/bcppcompiler.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/build.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/build_ext.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/config.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/install_scripts.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/bdist_wininst.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/bdist_dumb.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/sdist.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/bdist.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/build_scripts.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/bdist_rpm.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/install.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/bdist_msi.py
+./venv/lib/python3.9/site-packages/setuptools/_distutils/command/install_egg_info.py
+./venv/lib/python3.9/site-packages/pkg_resources/__init__.py
+./venv/lib/python3.9/site-packages/pkg_resources/_vendor/pyparsing.py
+./venv/lib/python3.9/site-packages/pkg_resources/_vendor/packaging/tags.py
+./venv/lib/python3.9/site-packages/pkg_resources/_vendor/packaging/_typing.py
+./venv/lib/python3.9/site-packages/pkg_resources/extern/__init__.py
+./venv/lib/python3.9/site-packages/_distutils_hack/__init__.py
+./venv/lib/python3.9/site-packages/pydantic/main.py
+./venv/lib/python3.9/site-packages/pydantic/v1/decorator.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_typing_extra.py
+./venv/lib/python3.9/site-packages/pydantic/_internal/_git.py
+./venv/lib/python3.9/site-packages/pydantic/deprecated/decorator.py
+./venv/lib/python3.9/site-packages/typing_inspection/typing_objects.py[0m
