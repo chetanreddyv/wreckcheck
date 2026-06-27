@@ -12,7 +12,7 @@ allowed-tools: Read Glob Grep Write
 # CodeSentinel — Enterprise Code Audit
 
 Systematically scan a codebase for enterprise readiness gaps across 5 dimensions.
-Read `references/hygiene-checklist.md` before starting. Read `references/severity-levels.md`
+Read `skills/code-auditor/references/hygiene-checklist.md` before starting. Read `skills/code-auditor/references/severity-levels.md`
 to calibrate finding severity.
 
 ## When to Use
@@ -26,7 +26,7 @@ to calibrate finding severity.
 Execute the following workflow sequentially:
 
 - [ ] **Step 1: Inventory** — list all files; note languages, entry points, config files, CI workflows.
-> **Conditional Trigger**: Read `references/hygiene-checklist.md` before starting the inventory to understand the full per-dimension checklist.
+> **Conditional Trigger**: Read `skills/code-auditor/references/hygiene-checklist.md` before starting the inventory to understand the full per-dimension checklist.
 - [ ] **Step 2: Secrets Scan** — grep for hardcoded credentials, exposed `.env` files, API keys in code.
 - [ ] **Step 3: Dependency Check** — inspect `requirements.txt`, `package.json`, `composer.json` for unpinned or absent versions.
 - [ ] **Step 4: Observability Check** — look for logging, error handling, metrics instrumentation.
@@ -34,7 +34,7 @@ Execute the following workflow sequentially:
 - [ ] **Step 6: License Check** — verify `LICENSE` file exists; check `requirements.txt` for license-incompatible deps.
 - [ ] **Step 7: CI/CD Hardening** — check `.github/workflows/` for pinned actions, permissions declarations, secret injection patterns.
 - [ ] **Step 8: Score & Output** — return findings as a structured JSON object matching the output schema.
-> **Conditional Trigger**: Read `references/severity-levels.md` before scoring to calibrate finding severity, and `references/output-template.md` to see a complete well-formed output example.
+> **Conditional Trigger**: Read `skills/code-auditor/references/severity-levels.md` before scoring to calibrate finding severity, and `skills/code-auditor/references/output-template.md` to see a complete well-formed output example.
 
 ## Critical Rules
 

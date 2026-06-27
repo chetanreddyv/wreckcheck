@@ -8,7 +8,7 @@ except FileNotFoundError:
 
 readiness_scorer = create_deep_agent(
     name="ReadinessScorer",
-    model="claude-haiku-3-5",   # or local
+    model="claude-haiku-4-5",
     system_prompt=system_prompt,
-    tools=["read_file", "write_file"]
+    tools=["read_file", "search_files"]
 )

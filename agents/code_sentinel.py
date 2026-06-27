@@ -8,7 +8,7 @@ except FileNotFoundError:
 
 code_sentinel = create_deep_agent(
     name="CodeSentinel",
-    model="claude-haiku-3-5",   # cheapest frontier, or swap for local
+    model="claude-haiku-4-5",
     system_prompt=system_prompt,
     tools=["read_file", "search_files"]
 )

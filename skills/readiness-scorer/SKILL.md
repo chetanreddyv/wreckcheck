@@ -44,7 +44,7 @@ Calculate two sub-scores separately before combining:
 ### Final Score Formula
 $$\text{Final Score} = (\text{Security Score} \times 0.60) + (\text{Architecture Score} \times 0.40)$$
 
-> **Conditional Trigger**: Read [scoring-formula.md](file:///Users/jaswanthibanoth/Documents/github/wreckcheck/skills/readiness-scorer/references/scoring-formula.md) when executing point deductions, verifying deduction point tables per severity level, resolving scoring disputes, or mapping the final numeric score to its Readiness Tier label.
+> **Conditional Trigger**: Read `skills/readiness-scorer/references/scoring-formula.md` when executing point deductions, verifying deduction point tables per severity level, resolving scoring disputes, or mapping the final numeric score to its Readiness Tier label.
 
 ---
 
@@ -52,7 +52,7 @@ $$\text{Final Score} = (\text{Security Score} \times 0.60) + (\text{Architecture
 
 Certain project contexts or environment settings waive or downgrade specific audit checks. When the Scout agent provides context flags (e.g., `internal-only`, `no-external-deps`, `eval-harness-planned`, or `observability-waived`), scoring deductions must be adjusted accordingly.
 
-> **Conditional Trigger**: Read [override-policy.md](file:///Users/jaswanthibanoth/Documents/github/wreckcheck/skills/readiness-scorer/references/override-policy.md) when Scout context flags are present in the pipeline or if a scoring dispute arises regarding check applicability and point overrides.
+> **Conditional Trigger**: Read `skills/readiness-scorer/references/override-policy.md` when Scout context flags are present in the pipeline or if a scoring dispute arises regarding check applicability and point overrides.
 
 ---
 
@@ -62,7 +62,7 @@ Apply the following critical constraints during score evaluation:
 
 - **PASS does not mean 100**: A PASS verdict from CodeSentinel does not guarantee a high Security Score. PASS simply indicates zero CRITICAL findings; LOW and MEDIUM findings still deduct points.
 - **Single FAIL Cap**: If CodeSentinel returns FAIL, the Final Score is strictly capped at **49** regardless of how well the Architecture Score performs.
-- **Double FAIL Floor**: If both agents return FAIL, output the report and set Final Score directly to **0**.
+- **Double FAIL Floor**: If both agents return FAIL, output the report- **ALWAYS** return the JSON structure directly to the caller — do NOT write it to disk.
 - **Precision & Rounding**: Do not round sub-scores during intermediate calculations. Carry two decimal places through the weighted formula, then round the Final Score to the nearest integer.
 - **Top-3 Gaps Sorting**: Top-3 gaps must be sorted strictly by **point impact** (highest deduction first), not by severity label. A cluster of MEDIUMs or multiple warnings can outrank a single HIGH depending on adjusted point deductions.
 

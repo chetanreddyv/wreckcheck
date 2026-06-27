@@ -1,0 +1,1196 @@
+=== README.md ===
+# 🤖 Vertical AI Agent
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![Pydantic AI](https://img.shields.io/badge/Pydantic_AI-Latest-FF69B4.svg)](https://logfire.pydantic.dev/docs/pydantic-ai/)
+[![MCP](https://img.shields.io/badge/MCP-Protocol-orange.svg)](https://modelcontextprotocol.io/)
+[![Gemini](https://img.shields.io/badge/Google_Gemini-2.0_Flash-4285F4.svg)](https://ai.google.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+**A production-grade Multi-Agent Orchestration System built with Pydantic AI and Model Context Protocol (MCP) for enterprise workspace automation.**
+
+Broad-scoped AI systems often struggle with specialized tasks. **Vertical AI Agent** solves this by using a **Manager-Specialist architecture** — a central Manager Agent powered by Google Gemini decomposes complex user requests into discrete, executable steps performed by domain-specific specialist agents, each with direct access to corporate tools and data via the Model Context Protocol.
+
+> [!IMPORTANT]
+> This system is designed for enterprise-grade automation. It handles planning, execution, and synthesis across disparate data silos (SQL databases, Google Drive, Gmail, Calendar, Jira, meeting transcripts) in a single unified flow — with human-in-the-loop safety for all mutation operations.
+
+---
+
+## Table of Contents
+
+- [Architecture Overview](#-architecture-overview)
+- [Key Features](#-key-features)
+- [Use Cases](#-common-application-use-cases)
+- [Technical Stack](#-technical-stack)
+- [Project Structure](#-project-structure)
+- [Module Deep-Dive](#-module-deep-dive)
+  - [Backend Core](#backend-core)
+  - [MCP Servers](#mcp-servers-tool-layer)
+  - [Frontend](#frontend)
+  - [Evaluation Pipeline](#evaluation-pipeline)
+- [API Reference](#-api-reference)
+- [Data Model & Execution Plan](#-data-model--execution-plan)
+- [Security & Authentication](#-security--authentication)
+- [Getting Started](#-getting-started)
+- [Environment Variables](#-environment-variables)
+- [Evaluation & Testing](#-evaluation--testing)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
+
+## 🏗️ Architecture Overview
+
+The system follows a triple-stage execution model: **Planning** → **Execution** → **Synthesis**.
+
+```mermaid
+graph TD
+    User([User Query]) --> Manager["Manager Agent (Gemini 2.0 Flash)"]
+    
+    subgraph Preparation["1. Planning Phase"]
+        Manager --> Plan["Execution Plan (Steps 1..N)"]
+    end
+    
+    subgraph Runtime["2. Iterative Execution Phase"]
+        Plan --> StepLoop{"Next Step (i)"}
+        StepLoop -- "Agent Choice" --> Exec["Specialist Agent Selection"]
+        
+        Exec --> ConfCheck{"Requires Confirmation?"}
+        
+        ConfCheck -- "Yes (Mutation Task)" --> HITL["Human-in-the-Loop Approval"]
+        HITL -- "Approved/Edited" --> Resume["Resume Execution"]
+        Resume --> ToolCall
+        
+        ConfCheck -- "No" --> ToolCall["MCP Tool Call"]
+        
+        subgraph Tools["3. Tool Layer (MCP Servers)"]
+            ToolCall -- "Standardized Protocol" --> MCPServers["mcp_servers/"]
+            MCPServers --> DBs[(SQL/Vector DBs)]
+            MCPServers --> APIs[[Gmail/Drive/Calendar/Jira]]
+        end
+        
+        ToolCall -- "Output Context" --> Grounding{"Grounding Check"}
+        Grounding -- "Pass > 0.70" --> UpdateContext["Context Accumulator"]
+        Grounding -- "Fail < 0.70" --> Fallback["Fallback Response"]
+        Fallback --> UpdateContext
+        UpdateContext --> StepLoop
+        StepLoop -- "Task Complete" --> Synth["Synthesis Agent"]
+    end
+    
+    subgraph Delivery["4. Delivery Phase"]
+        Synth --> Final([Final Response])
+    end
+```
+
+### How It Works
+
+1. **User submits a query** through the chat UI or API.
+2. **Manager Agent** analyzes the query, considers temporal context (current date/time), conversation history, and generates a structured `ExecutionPlan` with one or more steps.
+3. **PlanExecutor** iterates over each step:
+   - Resolves input dependencies from previous steps (via `{{steps.s1.output}}` templating).
+   - Routes the step to the correct specialist agent.
+   - If the step is flagged `requires_confirmation`, pauses for human approval before executing.
+   - The specialist agent invokes MCP tools to interact with external services.
+4. **General Agent** synthesizes all step outputs into a polished final response.
+5. **Response is streamed** back to the frontend via Server-Sent Events (SSE).
+
+---
+
+## 🌟 Key Features
+
+### 1. Intelligent Orchestration (The Manager)
+The **Manager Agent** (powered by Gemini 2.0 Flash) acts as the system's brain. It analyzes user intent, considers temporal context, and generates a structured `ExecutionPlan`.
+
+- **Intent Rewriting**: Converts vague queries into precise, actionable step instructions.
+- **Dependency Resolution**: Steps can depend on outputs from previous steps (e.g., "Use the email address found in Step 1").
+- **Input Templating**: `{{steps.s1.output}}` syntax passes data dynamically between agents.
+- **Clarification Loop**: If a request is ambiguous, the manager pauses and asks clarifying questions before proceeding.
+- **Error Policy**: Configurable per-plan error handling — `retry`, `ask_user`, `fail_fast`, or `skip`.
+
+### 2. Specialized Agent Fleet
+Each agent is a domain expert with purpose-built tools via MCP:
+
+| Agent | Tools | Description |
+|-------|-------|-------------|
+| 📧 **Email** | `list_messages`, `get_message`, `send_email`, `mark_read/unread`, `trash_message`, `list_labels`, `add/remove_label` | Full Gmail management with label-based organization |
+| 🗄️ **SQL** | `test_connection`, `list_databases`, `list_tables`, `get_schema`, `sample_rows`, `execute_query` | Safe MySQL query generation and execution against Salesforce data |
+| 📄 **Drive** | `list_files`, `search_files`, `get_file_content`, `create_folder`, `upload_file`, `download_file`, `get_file_metadata` | Google Drive file management with Office document content extraction |
+| 📅 **Calendar** | `list_upcoming_events`, `create_event`, `create_meet_conference` | Google Calendar scheduling and Google Meet creation |
+| 🎙️ **TLDV** | `search_meetings`, `search_documents` | Semantic search across meeting transcripts and documents via RAG pipeline |
+| 🐞 **Jira** | `search_issues`, `get_issue`, `create_issue`, `update_issue`, `add_comment`, `transition_issue`, `list_projects`, `get_my_issues` | Full Jira project management (supports Cloud + Data Center) |
+| 💬 **General** | *(none — LLM only)* | Response synthesis and general knowledge questions |
+
+### 3. 🛡️ Human-in-the-Loop Safety
+-   **High-Risk Action Detection**: Steps involving data mutation (sending emails, updating databases, creating Jira tickets) are automatically flagged via `requires_confirmation`.
+-   **User Approval UI**: The system pauses execution and renders a confirmation dialog in the frontend.
+-   **Modifiability**: Users can edit the agent's proposed action (e.g., rewriting an email draft) before approving it.
+-   **Cancel Capability**: Users can cancel any flagged step, providing full control over automated actions.
+
+### 4. Transparent Streaming Execution
+-   **Server-Sent Events (SSE)**: Real-time feedback on agent progress (step starts, SQL queries generated, status updates).
+-   **Step Cards**: Each agent step is rendered as a visual card in the UI showing the agent type and instruction.
+-   **Deterministic Data Passing**: Explicit inter-step data passing prevents "hallucinated actions."
+
+---
+
+## 💼 Common Application Use Cases
+
+### 🏢 Enterprise CRM Automation
+> *"Find all high-value leads from last month and draft a follow-up email."*
+1. **SQL Agent** → Queries Salesforce DB for leads with `Amount > $10k` created in the last 30 days.
+2. **Manager** → Formats the list of leads into a structured summary.
+3. **Email Agent** → Drafts a personalized outreach email for each lead *(pauses for user review)*.
+
+### 📅 Intelligent Scheduling
+> *"Schedule a sync with the engineering team to discuss the Q3 roadmap based on the last meeting's notes."*
+1. **TLDV Agent** → Searches past meeting transcripts for "Q3 roadmap" action items.
+2. **Calendar Agent** → Checks availability for participants mentioned in the notes.
+3. **Calendar Agent** → Creates a Google Meet event with the agenda derived from the transcript.
+
+### 🐞 Automated Bug Triage
+> *"Check the latest error logs in Drive and create Jira tickets for critical issues."*
+1. **Drive Agent** → Reads the latest log file from the "Server Logs" folder.
+2. **Manager** → Parses logs to identify `CRITICAL` error patterns.
+3. **Jira Agent** → Creates bug tickets in the `ENG` project with log snippets attached.
+
+### 📊 Cross-Platform Reporting
+> *"Summarize last week's sales numbers and email the report to the leadership team."*
+1. **SQL Agent** → Queries weekly sales aggregates from the Opportunities table.
+2. **General Agent** → Synthesizes findings into a formatted executive summary.
+3. **Email Agent** → Drafts and sends the report *(pauses for review)*.
+
+---
+
+## 🛠️ Technical Stack
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Agent Framework** | [Pydantic AI](https://logfire.pydantic.dev/docs/pydantic-ai/) | Type-safe, structured agent interactions with Pydantic models |
+| **Tool Protocol** | [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) via [FastMCP](https://github.com/jlowin/fastmcp) | Standardized tool communication between agents and services |
+| **LLM** | Google Gemini 2.0 Flash | Planning, execution, synthesis, and embedding generation |
+| **Backend** | [FastAPI](https://fastapi.tiangolo.com/) + Uvicorn | REST API with SSE streaming, async request handling |
+| **Vector Database** | [Pinecone](https://www.pinecone.io/) | Meeting transcript and document vector storage and retrieval |
+| **Reranking** | [Cohere](https://cohere.com/) Rerank API | Context reranking for improved RAG precision |
+| **Relational Database** | MySQL via [PyMySQL](https://pymysql.readthedocs.io/) | Salesforce CRM data storage and querying |
+| **Google Workspace** | Gmail API, Drive API, Calendar API | Email, file management, and scheduling |
+| **Project Management** | [Jira REST API](https://developer.atlassian.com/cloud/jira/platform/rest/) | Issue tracking, project management |
+| **Observability** | [Langfuse](https://langfuse.com/) | LLM tracing, latency monitoring, cost tracking |
+| **Frontend** | Vanilla HTML/JS + [Tailwind CSS](https://tailwindcss.com/) | Glassmorphic chat interface with real-time streaming |
+| **Embeddings** | `google-genai` (`text-embedding-004`) | Vector embeddings for RAG search |
+
+---
+
+## 📂 Project Structure
+
+```
+vertical_aiAgent/
+├── main.py                     # FastAPI app, API endpoints, SSE streaming, auth
+├── agents.py                   # Agent definitions, system prompts, Pydantic models
+├── executor.py                 # PlanExecutor — multi-step execution engine
+├── utils.py                    # Temporal context, schema formatting, result helpers
+├── auth_google.py              # Google OAuth 2.0 token generation
+├── sql_context.md              # SQL schema documentation and query patterns
+│
+├── mcp_servers/                # MCP Tool Servers (one per integration)
+│   ├── sql_server.py           # MySQL database operations
+│   ├── email_server.py         # Gmail API operations
+│   ├── calendar_server.py      # Google Calendar + Meet
+│   ├── drive_server.py         # Google Drive file management
+│   ├── rag_server.py           # RAG pipeline (Pinecone + Cohere reranker)
+│   └── jira_server.py          # Jira Cloud/Data Center operations
+│
+├── evaluation/                 # RAG evaluation pipeline (RAGAS)
+│   ├── generate_testset.py     # Synthetic Q&A test set generation
+│   ├── evaluate_rag.py         # RAGAS metric evaluation runner
+│   ├── verify_pipeline.py      # Single-sample pipeline verification
+│   ├── testset.json            # Generated test cases
+│   └── rag_evaluation_report.csv  # Evaluation results
+│
+├── tests/                      # Test and debug scripts
+│   ├── test_drive.py           # Drive integration tests
+│   ├── test_rag_*.py           # RAG pipeline tests
+│   ├── test_jira_selection.py  # Jira agent selection tests
+│   ├── test_manager_structure.py  # Manager plan structure tests
+│   ├── verify_*.py             # Migration and integration verification
+│   └── inspect_*.py            # Debugging inspection scripts
+│
+├── index.html                  # Frontend chat interface
+├── script.js                   # Frontend logic (ChatApp class)
+├── requirements.txt            # Python dependencies
+├── .gitignore                  # Git ignore rules
+└── .env                        # Environment variables (not committed)
+```
+
+---
+
+## 🔬 Module Deep-Dive
+
+### Backend Core
+
+#### `main.py` — FastAPI Application
+The application entry point. Manages the full request lifecycle:
+
+- **Lifespan Context Manager**: Initializes all agents and MCP servers at startup via `initialize_agents()`, and gracefully shuts down MCP server connections on exit.
+- **Authentication**: HTTP Basic Auth middleware (`check_auth`) validates credentials against `AGENT_USERNAME` / `AGENT_PASSWORD` environment variables (defaults: `admin` / `admin`).
+- **CORS**: Configured for `localhost` development (`ports 3000, 5500, 8080`) and `127.0.0.1`.
+- **Conversation History**: Maintains a global `conversation_history` list with a sliding window of the last 10 turns (`keep_last_n_turns`).
+- **Endpoints**: See [API Reference](#-api-reference).
+
+#### `agents.py` — Agent Definitions
+Defines all 7 agents and the data models that drive orchestration:
+
+- **`AgentSelection`** (Enum): `EMAIL`, `SQL`, `DRIVE`, `CALENDAR`, `TLDV`, `JIRA`, `GENERAL`.
+- **`Step`** (Pydantic Model): Defines a single execution step with `id`, `agent`, `instruction`, `inputs` (dict), `depends_on` (list of step IDs), and `requires_confirmation` (bool).
+- **`ExecutionPlan`** (Pydantic Model): Defines the full plan with `steps`, `rewritten_intent`, `final_response_instruction`, `error_policy`, and `clarifying_questions`.
+- **Manager Agent**: The planning agent uses Gemini 2.0 Flash with a detailed system prompt that understands temporal context, available agents, and produces structured `ExecutionPlan` output.
+- **Specialist Agents**: Each agent is initialized with its own system prompt and connected to the corresponding MCP server via `MCPServerStdio`.
+- **`initialize_agents()`**: Loads SQL schema from the database at startup and injects it into the SQL agent's system prompt. Also registers MCP tools with each agent.
+
+#### `executor.py` — PlanExecutor
+The execution engine that processes `ExecutionPlan` step by step:
+
+- **Input Resolution**: Resolves `{{steps.s1.output}}` placeholders by substituting outputs from completed steps.
+- **Step Execution**: Routes each step to the correct specialist agent, passing resolved instructions and context.
+- **Confirmation Flow**: Pauses execution when `requires_confirmation` is set, yields a `confirmation_request` event, and resumes from the confirmed step index.
+- **SQL Data Extraction**: Captures SQL query results and structures them as `sql_data` (with `rows`, `columns`, `executed_query`, `executed_explanation`) for rich frontend rendering.
+- **Response Synthesis**: After all steps complete, invokes the General Agent with accumulated context and the plan's `final_response_instruction` to produce the final answer.
+- **Event Streaming**: Yields structured events (`status`, `step_start`, `sql_query`, `confirmation_request`, `result`, `error`) for SSE consumption.
+
+#### `utils.py` — Utility Functions
+- **`get_temporal_context()`**: Returns formatted current date/time string injected into agent prompts.
+- **`format_schema_rows(rows)`**: Converts raw SQL schema rows into a structured text description for the SQL agent's system prompt.
+- **`format_sql_results(rows, columns)`**: Formats SQL query results into a human-readable table with aligned columns and row counts.
+
+#### `auth_google.py` — Google OAuth Setup
+One-time OAuth 2.0 flow for Google Workspace APIs:
+- Requests scopes for Gmail (read, send, modify), Calendar (read, events), and Drive (read).
+- Uses `InstalledAppFlow` with the local server strategy.
+- Saves credentials to `token.json` for subsequent use by MCP servers.
+
+---
+
+### MCP Servers (Tool Layer)
+
+Each MCP server is a standalone [FastMCP](https://github.com/jlowin/fastmcp) process that exposes tools callable by the agents.
+
+#### `sql_server.py` — MySQL Operations
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `test_connection` | — | Verifies MySQL connectivity |
+| `list_databases` | — | Lists all available databases |
+| `list_tables` | `database` | Lists tables in a database |
+| `get_schema` | `database`, `table` | Returns column names, types, keys |
+| `sample_rows` | `database`, `table`, `limit` | Returns sample data rows |
+| `execute_query` | `query` | Executes a SQL query and returns results (max 50 rows) |
+
+**Safety**: Uses read-only connections by default. Query timeouts and row limits are enforced.
+
+#### `email_server.py` — Gmail Operations
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `list_messages` | `max_results`, `label`, `query` | Lists Gmail messages with optional filtering |
+| `get_message` | `message_id` | Retrieves full email content (subject, from, to, body) |
+| `send_email` | `to`, `subject`, `body`, `cc`, `bcc` | Sends an email via Gmail API |
+| `mark_as_read` / `mark_as_unread` | `message_id` | Toggles read status |
+| `trash_message` | `message_id` | Moves message to trash |
+| `list_labels` | — | Lists all Gmail labels |
+| `add_label` / `remove_label` | `message_id`, `label_name` | Label management |
+
+**Auth**: Uses `token.json` (generated by `auth_google.py`) for OAuth credentials.
+
+#### `calendar_server.py` — Google Calendar
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `list_upcoming_events` | `max_results`, `time_min` | Lists upcoming calendar events |
+| `create_event` | `summary`, `start`, `end`, `description`, `attendees` | Creates a calendar event |
+| `create_meet_conference` | `summary`, `start`, `end`, `attendees` | Creates a Google Meet video conference event |
+
+#### `drive_server.py` — Google Drive
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `list_files` | `max_results`, `folder_id` | Lists files and folders |
+| `search_files` | `query`, `max_results` | Searches Drive with query string |
+| `get_file_content` | `file_id` | Gets file content with Office format extraction (.docx, .xlsx, .pptx) |
+| `create_folder` | `name`, `parent_id` | Creates a new folder |
+| `get_file_metadata` | `file_id` | Returns file metadata (name, size, dates, permissions) |
+| `upload_file` | `name`, `content`, `mime_type`, `parent_id` | Uploads a file to Drive |
+| `download_file` | `file_id`, `path` | Downloads a file locally |
+
+**Content Extraction**: Supports reading content from Google Docs, Sheets, `.docx`, `.xlsx`, `.pptx`, and `.csv` files using XML parsing for Office formats.
+
+#### `rag_server.py` — RAG Pipeline (Meeting/Document Search)
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `search_meetings` | `query`, `limit`, `min_similarity`, `speaker_filter`, `date_from`, `date_to` | Semantic search across meeting transcripts |
+| `search_documents` | `query`, `limit`, `min_similarity`, `doc_type_filter` | Semantic search across documents |
+
+**Pipeline Architecture**:
+1. **Query Embedding**: Uses `google-genai` (`text-embedding-004`) to embed the search query.
+2. **Vector Search**: Queries Pinecone index with optional metadata filters (speaker, date range, document type).
+3. **Reranking**: Uses Cohere Rerank API (`rerank-v3.5`) to reorder results by relevance to the original query.
+4. **Result Formatting**: Returns ranked results with content, metadata (meeting ID, speaker, timestamp), and similarity scores.
+
+#### `jira_server.py` — Jira Project Management
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `search_issues` | `jql`, `max_results`, `fields` | Searches issues using JQL |
+| `get_issue` | `issue_key` | Gets full issue details |
+| `create_issue` | `project_key`, `summary`, `description`, `issue_type`, `priority`, `assignee`, `labels` | Creates a new issue |
+| `update_issue` | `issue_key`, `fields` | Updates issue fields |
+| `add_comment` | `issue_key`, `body` | Adds a comment to an issue |
+| `get_comments` | `issue_key` | Retrieves all comments |
+| `transition_issue` | `issue_key`, `transition_id` | Transitions issue status |
+| `list_transitions` | `issue_key` | Lists available transitions |
+| `list_projects` | — | Lists all accessible projects |
+| `get_my_issues` | `max_results` | Gets issues assigned to current user |
+
+**Auth**: Supports both Personal Access Token (PAT) for Data Center and Basic Auth (email + API token) for Jira Cloud.
+
+---
+
+### Frontend
+
+#### `index.html` + `script.js` — Chat Interface
+A single-page chat application with a nature-themed glassmorphic design:
+
+- **Design System**: Custom Tailwind CSS configuration with a nature-inspired color palette (`nature-dark`, `nature-medium`, `nature-light`, `nature-accent`) and glassmorphism effects (`glass-base`, `glass-card`, `glass-input`).
+- **Typography**: [Manrope](https://fonts.google.com/specimen/Manrope) font family with [Material Symbols Outlined](https://fonts.google.com/icons) icons.
+- **ChatApp Class** (`script.js`): Manages the entire client-side lifecycle:
+  - **Authentication**: Login overlay with Basic Auth → `localStorage` persistence.
+  - **Streaming**: SSE-based message reading via `readStream()` — handles `status`, `step_start`, `sql_query`, `confirmation_request`, `result`, and `error` event types.
+  - **Markdown Rendering**: Custom `formatMessage()` and `parseInline()` methods for headers, lists, code blocks, bold, italic, and links.
+  - **SQL Table Rendering**: `createSQLTable()` builds responsive HTML tables for query results.
+  - **Confirmation UI**: `renderConfirmationUI()` renders an editable approval dialog for flagged steps, with confirm/cancel actions.
+  - **Auto-resizing Textarea**: Dynamic height adjustment for the input field.
+  - **Suggestion Chips**: Pre-built query shortcuts (draft email, query DB, schedule meeting, search Drive, summarize meeting).
+- **Sidebar**: Collapsible navigation showing connected services (Gmail, TLDV, Calendar, Google Meet, Database), new chat button, logout, and connection status indicator.
+- **Responsive**: Mobile-optimized with a hamburger menu toggle for the sidebar.
+
+---
+
+### Evaluation Pipeline
+
+Located in `evaluation/`, this pipeline benchmarks the RAG agent's performance using the [RAGAS](https://docs.ragas.io/) framework.
+
+#### `generate_testset.py` — Test Set Generation
+1. **Context Fetching**: Queries the RAG server with diverse seed queries ("marketing", "engineering", "sales", etc.) to collect context chunks from Pinecone.
+2. **Q&A Generation**: Uses Gemini 2.0 Flash to generate question-answer pairs from each retrieved context chunk.
+3. **Output**: Saves a `testset.json` file with questions, ground truth answers, and source contexts.
+
+#### `evaluate_rag.py` — RAGAS Evaluation
+1. **Agent Execution**: Runs the TLDV agent on each test question and captures both the answer and the retrieved contexts (extracted from `ToolReturnPart` messages).
+2. **Metrics**: Evaluates using four RAGAS metrics:
+   - **Faithfulness**: Is the answer grounded in the retrieved context?
+   - **Answer Relevancy**: Does the answer address the question?
+   - **Context Precision**: Are the retrieved chunks relevant?
+   - **Context Recall**: Did retrieval capture the needed information?
+3. **Judge LLM**: Uses Gemini 2.0 Flash as the evaluation judge with `all-MiniLM-L6-v2` embeddings from HuggingFace.
+4. **Output**: Saves a detailed `rag_evaluation_report.csv`.
+
+#### `verify_pipeline.py` — Quick Verification
+A single-sample smoke test that runs one question from the test set through the TLDV agent and validates that a non-empty answer is returned.
+
+---
+
+## 📡 API Reference
+
+All endpoints require HTTP Basic Authentication via the `Authorization` header.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check — returns agent and MCP server status |
+| `GET` | `/verify-auth` | Validates authentication credentials |
+| `POST` | `/query` | Synchronous query processing (full response) |
+| `GET` | `/query-stream?query=...` | **Primary endpoint** — SSE streaming query with real-time step updates |
+| `POST` | `/confirm-step` | Resumes paused execution after human approval |
+| `POST` | `/reset-history` | Clears conversation history |
+| `GET` | `/schema` | Returns the loaded SQL database schema |
+
+### SSE Event Types (from `/query-stream`)
+
+| Event Type | Payload | Description |
+|------------|---------|-------------|
+| `status` | `{content: string}` | General status update |
+| `step_start` | `{step_id, agent, instruction}` | A new step is beginning execution |
+| `rewritten_query` | `{content: string}` | The manager's rewritten user intent |
+| `sql_query` | `{query, explanation}` | A SQL query was generated |
+| `confirmation_request` | `{step_id, step_index, instruction, inputs, session_id}` | Execution paused for user approval |
+| `result` | `{success, response, intent, sql_data, error}` | Final result of the query |
+| `error` | `{error: string}` | An error occurred during processing |
+
+---
+
+## 📋 Data Model & Execution Plan
+
+### ExecutionPlan (Output of Manager Agent)
+
+```python
+class ExecutionPlan(BaseModel):
+    steps: list[Step]                          # Ordered steps to execute
+    rewritten_intent: str                      # Refined summary of user request
+    final_response_instruction: str            # How to synthesize the final response
+    error_policy: Literal["retry", "ask_user", "fail_fast", "skip"]
+    clarifying_questions: list[str]            # Questions if request is ambiguous
+```
+
+### Step (Individual Execution Unit)
+
+```python
+class Step(BaseModel):
+    id: str                                    # Unique step ID (e.g., "s1")
+    agent: AgentSelection                      # Which agent to use
+    instruction: str                           # What the agent should do
+    inputs: dict[str, str]                     # Named inputs (can use templates)
+    depends_on: list[str]                      # Step IDs this step depends on
+    requires_confirmation: bool                # If True, pause for user approval
+```
+
+### SQL Schema Context
+The system operates against a Salesforce-exported MySQL database. The full schema is documented in `sql_context.md` and includes 17 tables:
+
+`Account`, `Contact`, `Opportunity`, `Session`, `ProgramInstructorAvailability`, `Deliverable`, `Lead`, `Campaign`, `CampaignMember`, `Student`, `SessionAttendance`, `AccountContactRelation`, `AccountHistory`, `ContactHistory`, `LeadHistory`, `OpportunityHistory`, `OpportunityPipelineHistory`, `CommunicationLogEntry`, `DataDictionaryFields`
+
+The SQL agent's system prompt is dynamically enriched with the actual schema at startup (via `initialize_agents()`).
+
+---
+
+## 🔒 Security & Authentication
+
+| Layer | Mechanism | Details |
+|-------|-----------|---------|
+| **API Access** | HTTP Basic Auth | Username/password validated against env vars; returned as `401` on failure |
+| **Frontend** | `localStorage` token | Base64-encoded credentials stored client-side |
+| **Google Workspace** | OAuth 2.0 | Scopes: `gmail.readonly`, `gmail.send`, `gmail.modify`, `calendar`, `drive.readonly`. Token saved to `token.json` |
+| **Jira** | PAT / Basic Auth | Personal Access Token for Data Center; email + API token for Cloud |
+| **Database** | Environment variables | MySQL credentials via `.env` (never committed to Git) |
+| **Secrets** | `.env` file | All API keys and credentials stored in `.env`, excluded via `.gitignore` |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.10+
+- MySQL Server (with Salesforce-exported data)
+- [Pinecone](https://www.pinecone.io/) account and index
+- [Google Cloud Project](https://console.cloud.google.com/) with Gmail, Calendar, and Drive APIs enabled
+- [Gemini API Key](https://ai.google.dev/)
+- (Optional) [Jira](https://www.atlassian.com/software/jira) instance with API access
+- (Optional) [Cohere](https://cohere.com/) API key for reranking
+- (Optional) [Langfuse](https://langfuse.com/) account for observability
+
+### Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/chetanreddyv/vertical_aiAgent.git
+   cd vertical_aiAgent
+   ```
+
+2. **Set up virtual environment**:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+3. **Configure environment** — create a `.env` file (see [Environment Variables](#-environment-variables)).
+
+4. **Set up Google OAuth**:
+   ```bash
+   # Place your OAuth client_secret.json in the project root
+   python auth_google.py
+   # Follow the browser flow to authorize — generates token.json
+   ```
+
+5. **Run the application**:
+   ```bash
+   uvicorn main:app --host 0.0.0.0 --port 8001
+   ```
+
+6. **Open the frontend**: Navigate to `index.html` in your browser (or serve via Live Server on port 5500).
+
+> [!NOTE]
+> MCP servers are automatically started and managed by the agent framework at application startup. No separate server processes are needed.
+
+---
+
+## 🔑 Environment Variables
+
+Create a `.env` file in the project root with the following:
+
+```env
+# --- Core ---
+GEMINI_API_KEY=your_gemini_api_key
+
+# --- Authentication (for API access) ---
+AGENT_USERNAME=admin           # Default: admin
+AGENT_PASSWORD=admin           # Default: admin
+
+# --- MySQL Database ---
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+
+# --- Google OAuth ---
+GOOGLE_OAUTH_CLIENT_ID=your_oauth_client_id
+GOOGLE_OAUTH_CLIENT_SECRET=your_oauth_client_secret
+
+# --- Email (Legacy SMTP fallback) ---
+EMAIL_ADDRESS=your_email@gmail.com
+EMAIL_PASSWORD=your_app_password
+
+# --- Pinecone (Vector DB) ---
+PINECONE_API_KEY=your_pinecone_api_key
+PINECONE_INDEX_NAME=your_index_name
+PINECONE_HOST=your_pinecone_host_url
+
+# --- Cohere (Reranking) ---
+COHERE_API=your_cohere_api_key
+
+# --- TLDV ---
+TLDV_API_KEY=your_tldv_api_key
+
+# --- Jira ---
+JIRA_URL=https://your-domain.atlassian.net
+JIRA_USERNAME=your_email@company.com
+JIRA_API_TOKEN=your_jira_api_token
+# OR for Data Center:
+JIRA_PAT=your_personal_access_token
+
+# --- Observability (Optional) ---
+LANGFUSE_PUBLIC_KEY=your_langfuse_public_key
+LANGFUSE_SECRET_KEY=your_langfuse_secret_key
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+---
+
+## 📊 Evaluation & Testing
+
+### RAG Evaluation Pipeline (RAGAS)
+
+```bash
+# 1. Generate synthetic test set from your Pinecone data
+python evaluation/generate_testset.py
+
+# 2. Verify the pipeline works with a single sample
+python evaluation/verify_pipeline.py
+
+# 3. Run full RAGAS evaluation
+python evaluation/evaluate_rag.py
+# → Outputs: evaluation/rag_evaluation_report.csv
+```
+
+**Metrics measured**: Faithfulness, Answer Relevancy, Context Precision, Context Recall.
+
+### Test Scripts
+
+The `tests/` directory contains integration and debugging scripts:
+
+| Script | Purpose |
+|--------|---------|
+| `test_drive.py`, `test_drive_direct.py` | Google Drive integration tests |
+| `test_rag_advanced.py`, `test_rag_simplified.py` | RAG pipeline search tests |
+| `test_jira_selection.py` | Jira agent routing tests |
+| `test_manager_structure.py` | Validates Manager Agent plan structure |
+| `test_tldv_suite.py` | TLDV meeting search test suite |
+| `test_universal_memory.py` | Conversation history tests |
+| `verify_gemini_agents.py` | Verifies Gemini model connectivity |
+| `verify_pinecone_integration.py` | Pinecone index connectivity check |
+| `inspect_*.py` | Debugging tools for metadata, schemas, docs |
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/amazing-feature`).
+3. Commit your changes (`git commit -m 'Add amazing feature'`).
+4. Push to the branch (`git push origin feature/amazing-feature`).
+5. Open a Pull Request.
+
+---
+
+## 📄 License
+
+MIT License — See the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🚀 Phase 2 — Supervisor Architecture Refactor
+
+> [!NOTE]
+> Phase 2 replaces the 3-phase Manager→Executor→Synthesizer pipeline with a simpler, faster **Supervisor Agent** pattern. All existing integrations (MCP servers, Slack bot, frontend) remain unchanged.
+
+### What Changed
+
+| | Phase 1 | Phase 2 |
+|-|---------|---------|
+| **LLM calls per query** | 3+ (plan → execute each step → synthesize) | **1** |
+| **Orchestration** | `manager_agent` → `PlanExecutor` → `synthesizer_agent` | `supervisor_agent` only |
+| **Tool routing** | Structured `ExecutionPlan` with step templating | Direct tool calls |
+| **Execution engine** | `executor.py` (251 lines) | **Deleted** |
+| **HITL** | `requires_confirmation` flag on planned steps | Write tools return confirmation payloads |
+
+### New Architecture
+
+```mermaid
+graph TD
+    User([User Query]) --> Sup["Supervisor Agent (Gemini 2.0 Flash)"]
+
+    subgraph ReadTools["Read Tools (execute immediately)"]
+        Sup --> SK[search_knowledge]
+        Sup --> QD[query_database]
+        Sup --> SE[search_emails]
+        Sup --> SC[search_calendar]
+        Sup --> SD[search_drive]
+        Sup --> SJ[search_jira]
+    end
+
+    subgraph WriteTools["Write Tools (HITL — confirmation required)"]
+        Sup --> EM[send_email]
+        Sup --> CE[create_calendar_event]
+        Sup --> CJ[create_jira_issue]
+        Sup --> UJ[update_jira_issue]
+        Sup --> AJ[add_jira_comment]
+        Sup --> TJ[transition_jira_issue]
+        Sup --> CD[create_drive_folder]
+        Sup --> UD[upload_to_drive]
+    end
+
+    WriteTools -- "Returns confirmation payload" --> HITL[User Approval]
+    HITL -- "POST /confirm-step" --> Exec[execute_confirmed_action]
+    Exec --> MCP[MCP Servers]
+    ReadTools --> MCP
+    MCP --> Final([Final Response])
+```
+
+### How the Supervisor Works
+
+1. **User submits a query** — same as before, via chat UI or API.
+2. **Supervisor Agent** receives the query and calls the right specialist tool(s) directly via function calling — no planning step needed.
+3. **Read tools** execute immediately: `search_knowledge`, `query_database`, `search_emails`, `search_calendar`, `search_drive`, `search_jira`.
+4. **Write tools** (any action that mutates state) return a structured **confirmation payload** instead of executing:
+   ```json
+   { "__confirmation_required__": true, "action": "send_email", "details": {...}, "preview": "..." }
+   ```
+5. **Streaming layer** detects the confirmation marker, pauses, and sends a `confirmation_request` SSE event to the frontend.
+6. **User approves** via the existing confirmation UI — POST to `/confirm-step`.
+7. **`execute_confirmed_action()`** calls the MCP tool directly to perform the action.
+
+### HITL Write Tools
+
+| Tool | MCP Action | Description |
+|------|-----------|-------------|
+| `send_email` | `email_mcp.send_email` | Send Gmail — always pauses for review |
+| `create_calendar_event` | `calendar_mcp.create_event` / `create_meeting` | Create event or Google Meet |
+| `create_jira_issue` | `jira_mcp.jira_create_issue` | Create new Jira issue |
+| `update_jira_issue` | `jira_mcp.jira_update_issue` | Update existing issue fields |
+| `add_jira_comment` | `jira_mcp.jira_add_comment` | Add comment to issue |
+| `transition_jira_issue` | `jira_mcp.jira_transition_issue` | Change issue status |
+| `create_drive_folder` | `drive_mcp.create_folder` | Create Drive folder |
+| `upload_to_drive` | `drive_mcp.upload_file` | Upload file to Drive |
+
+### Updated File Structure
+
+```
+vertical_aiAgent/
+├── main.py          # Simplified: single supervisor_agent.run() call + confirm flow
+├── agents.py        # Supervisor agent with read/write tool definitions
+│                    # execute_confirmed_action() — post-approval MCP executor
+│                    # SupervisorDeps — replaces SqlDeps (broader scope)
+├── executor.py      # ← REMOVED in Phase 2
+└── ...              # All MCP servers, frontend, and Slack bot unchanged
+```
+
+### Updated `agents.py` — Key Additions
+
+- **`supervisor_agent`**: Single `Agent` with 14 registered tools (6 read, 8 write).
+- **`SupervisorDeps`**: Replaces `SqlDeps` — holds SQL schema, business context, approved DBs.
+- **`CONFIRMATION_MARKER`**: Constant `"__confirmation_required__"` used to detect write tool payloads.
+- **`execute_confirmed_action(action, details)`**: Dispatches approved actions to the correct MCP server tool.
+
+### Updated API Behavior (Phase 2)
+
+`/query-stream` SSE events are the same as Phase 1, but with simplified internals:
+
+| Event | Phase 1 source | Phase 2 source |
+|-------|---------------|---------------|
+| `status` | PlanExecutor step loop | supervisor_agent startup |
+| `step_start` | Per-step execution | *(removed — tool calls are atomic)* |
+| `rewritten_query` | Manager agent output | *(removed)* |
+| `confirmation_request` | `requires_confirmation` flag on Step | Write tool returning `__confirmation_required__` |
+| `result` | Synthesizer agent | supervisor_agent final output |
+
+> [!TIP]
+> Multi-step tasks (e.g., "find meeting notes then email a summary") still work — the supervisor chains tool calls within a single LLM run using native function calling, so the context flows naturally without explicit `{{steps.s1.output}}` templating.
+
+---
+
+<p align="center">
+  Built with ❤️ using Pydantic AI, FastMCP, and Google Gemini
+</p>
+
+
+=== SKILL.md ===
+NOT FOUND (HTTP 404)
+
+=== main.py ===
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
+from fastapi.responses import StreamingResponse
+import json
+import time
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+import logging
+from dotenv import load_dotenv
+from contextlib import asynccontextmanager
+from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, ModelRequest, UserPromptPart, ToolReturnPart
+from pydantic_ai import UsageLimits
+from langfuse import observe, Langfuse
+
+import agents
+from agents import (
+    supervisor_agent, sql_agent, email_agent, calendar_agent,
+    drive_agent, general_agent, jira_agent,
+    mysql_mcp, calendar_mcp, drive_mcp, rag_mcp, jira_mcp, email_mcp,
+    CONFIRMATION_MARKER, execute_confirmed_action,
+)
+from utils import format_query_results, get_temporal_context
+
+import os
+
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Global state
+sessions: Dict[str, list] = {}
+supervisor_deps: Optional[agents.SupervisorDeps] = None
+
+security = HTTPBasic()
+
+def check_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    expected_username = os.getenv("BASIC_AUTH_USERNAME")
+    expected_password = os.getenv("BASIC_AUTH_PASSWORD")
+    if not expected_username or not expected_password:
+        logger.error("Basic Auth credentials not set in environment variables")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server authentication misconfigured",
+        )
+    is_correct_username = secrets.compare_digest(credentials.username, expected_username)
+    is_correct_password = secrets.compare_digest(credentials.password, expected_password)
+    if not (is_correct_username and is_correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+
+def keep_last_n_turns(message_history: list, n_turns: int = 15) -> list:
+    """Keep only the last N conversation turns."""
+    max_messages = n_turns * 2
+    if len(message_history) > max_messages:
+        return message_history[-max_messages:]
+    return message_history
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize agents and MCP servers on startup."""
+    global supervisor_deps
+    logger.info("Initializing MCP servers and fetching schema...")
+    
+    # Start MCP servers for all specialist agents
+    async with (
+        email_agent.run_mcp_servers(),
+        sql_agent.run_mcp_servers(),
+        calendar_agent.run_mcp_servers(),
+        drive_agent.run_mcp_servers(),
+        general_agent.run_mcp_servers(),
+        jira_agent.run_mcp_servers(),
+    ):
+        try:
+            supervisor_deps = await agents.initialize_agents()
+            logger.info("✅ Agents initialized successfully")
+        except Exception as e:
+            logger.error(f"Error during initialization: {e}", exc_info=True)
+            supervisor_deps = agents.SupervisorDeps(
+                schema_text="Schema unavailable.",
+                business_context="",
+                approved_databases=["Salesforce"],
+                default_database="Salesforce"
+            )
+        
+        logger.info("✅ Supervisor ready")
+        yield
+        logger.info("Shutting down MCP servers...")
+
+
+app = FastAPI(
+    title="AI Agent API",
+    description="FastAPI backend for multi-agent orchestration with MySQL & Google Workspace",
+    version="2.0.0",
+    lifespan=lifespan
+)
+
+# CORS middleware — set ALLOWED_ORIGINS=https://your-domain.com,https://other.com in production
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Request/Response models
+class QueryRequest(BaseModel):
+    query: str
+    session_id: Optional[str] = "default"
+
+class QueryResponse(BaseModel):
+    intent: str
+    response: str
+    success: bool
+    error: Optional[str] = None
+    sql_data: Optional[Dict[str, Any]] = None
+    status_updates: Optional[list[str]] = None
+    clarification_needed: Optional[bool] = False
+    clarifying_questions: Optional[list[str]] = None
+
+class StepConfirmation(BaseModel):
+    session_id: str
+    step_id: str  # action name (e.g., "send_email")
+    approved_instruction: str  # JSON-encoded details
+    approved_inputs: Optional[Dict[str, str]] = None
+
+# In-memory store for pending confirmations
+pending_confirmations: Dict[str, Dict[str, Any]] = {}
+
+
+@app.get("/")
+async def root():
+    return {
+        "status": "online",
+        "service": "AI Agent API v2 (Supervisor)",
+        "agents": ["email", "sql", "drive", "calendar", "jira", "general"]
+    }
+
+@app.get("/verify-auth")
+async def verify_auth(username: str = Depends(check_auth)):
+    return {"status": "authenticated", "user": username}
+
+
+def _extract_confirmation_from_messages(messages) -> Optional[Dict]:
+    """Scan agent messages for a confirmation payload in tool returns."""
+    for msg in messages:
+        if hasattr(msg, 'parts'):
+            for part in msg.parts:
+                if isinstance(part, ToolReturnPart):
+                    content = str(part.content)
+                    if CONFIRMATION_MARKER in content:
+                        try:
+                            return json.loads(content)
+                        except json.JSONDecodeError:
+                            continue
+    return None
+
+
+@observe(capture_output=False)
+async def query_stream_generator(query: str, session_id: str = "default"):
+    """Process a query through the supervisor agent with SSE streaming."""
+    global sessions, pending_confirmations
+    start_time = time.time()
+    try:
+        user_input = query.strip()
+        if not user_input:
+            yield f"data: {json.dumps({'type': 'error', 'error': 'Query cannot be empty'})}\n\n"
+            return
+        
+        if session_id not in sessions:
+            sessions[session_id] = []
+        history = sessions[session_id]
+        
+        logger.info(f"--- 📥 START STREAMING QUERY ---")
+        logger.info(f"Query: '{user_input}' (Session: {session_id})")
+        
+        yield f"data: {json.dumps({'type': 'status', 'content': 'Analyzing your request...'})}\n\n"
+        
+        # Run supervisor agent
+        temporal_context = get_temporal_context()
+        prompt = f"{temporal_context}{user_input}"
+        
+        result = await supervisor_agent.run(
+            prompt,
+            deps=supervisor_deps,
+            message_history=history,
+            usage_limits=UsageLimits(request_limit=25, tool_calls_limit=15),
+        )
+        
+        # Check for confirmation requests in tool returns
+        confirmation = _extract_confirmation_from_messages(result.all_messages())
+        
+        if confirmation and confirmation.get(CONFIRMATION_MARKER):
+            # Store pending confirmation
+            pending_confirmations[session_id] = {
+                "action": confirmation["action"],
+                "details": confirmation["details"],
+                "preview": confirmation["preview"],
+                "original_query": user_input,
+            }
+            
+            action_name = confirmation["action"]
+            preview_text = confirmation["preview"]
+            detail_data = confirmation["details"]
+            
+            logger.info(f"⏸️ Confirmation required for {action_name}")
+            
+            # Send confirmation request to client
+            status_msg = json.dumps({"type": "status", "content": f"Preparing {action_name}..."})
+            yield f"data: {status_msg}\n\n"
+            
+            confirm_msg = json.dumps({
+                "type": "confirmation_request",
+                "step_id": action_name,
+                "step_index": 0,
+                "instruction": preview_text,
+                "inputs": detail_data,
+                "session_id": session_id,
+            })
+            yield f"data: {confirm_msg}\n\n"
+            
+            # Update history with the partial interaction
+            approval_text = f"I've prepared the following action for your approval:\n\n{preview_text}"
+            history.append(ModelRequest(parts=[UserPromptPart(content=user_input)]))
+            history.append(ModelResponse(parts=[TextPart(content=approval_text)]))
+            sessions[session_id] = keep_last_n_turns(history)
+            return
+        
+        # No confirmation needed — return the response directly
+        response_text = str(result.output)
+        
+        # Update history
+        history.append(ModelRequest(parts=[UserPromptPart(content=user_input)]))
+        history.append(ModelResponse(parts=[TextPart(content=response_text)]))
+        sessions[session_id] = keep_last_n_turns(history)
+        
+        response_data = {
+            "intent": "supervisor",
+            "response": response_text,
+            "success": True,
+        }
+        yield f"data: {json.dumps({'type': 'result', 'data': response_data})}\n\n"
+        
+        total_duration = time.time() - start_time
+        logger.info(f"--- 🏁 FINISH STREAMING QUERY (Total: {total_duration:.2f}s) ---")
+    
+    except Exception as e:
+        logger.error(f"❌ Error processing query stream: {e}", exc_info=True)
+        yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+
+@observe(capture_output=False)
+async def confirm_step_stream_generator(confirmation: StepConfirmation):
+    """Execute a confirmed write action."""
+    global pending_confirmations, sessions
+    
+    session_id = confirmation.session_id
+    pending = pending_confirmations.get(session_id)
+    
+    if not pending:
+        yield f"data: {json.dumps({'type': 'error', 'error': 'No pending confirmation found for this session'})}\n\n"
+        return
+    
+    action = pending["action"]
+    details = pending["details"]
+    
+    # If user modified the instruction, try to parse updated details
+    if confirmation.approved_inputs:
+        details.update(confirmation.approved_inputs)
+    
+    logger.info(f"▶️ Executing confirmed action: {action}")
+    yield f"data: {json.dumps({'type': 'status', 'content': f'Executing {action}...'})}\n\n"
+    
+    try:
+        result = await execute_confirmed_action(action, details)
+        
+        # Clean up pending state
+        del pending_confirmations[session_id]
+        
+        # Update history
+        history = sessions.get(session_id, [])
+        history.append(ModelResponse(parts=[TextPart(content=result)]))
+        sessions[session_id] = keep_last_n_turns(history)
+        
+        response_data = {
+            "intent": "confirmed_action",
+            "response": result,
+            "success": True,
+        }
+        yield f"data: {json.dumps({'type': 'result', 'data': response_data})}\n\n"
+    
+    except Exception as e:
+        logger.error(f"❌ Error executing confirmed action: {e}", exc_info=True)
+        yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+
+@app.get("/query-stream")
+async def stream_query(query: str, session_id: str = "default", username: str = Depends(check_auth)):
+    return StreamingResponse(
+        query_stream_generator(query, session_id),
+        media_type="text/event-stream"
+    )
+
+@app.post("/confirm-step")
+async def confirm_step(confirmation: StepConfirmation, username: str = Depends(check_auth)):
+    return StreamingResponse(
+        confirm_step_stream_generator(confirmation),
+        media_type="text/event-stream"
+    )
+
+@app.post("/query", response_model=QueryResponse)
+@observe()
+async def process_query(request: QueryRequest, username: str = Depends(check_auth)):
+    """Non-streaming query endpoint."""
+    global sessions
+    start_time = time.time()
+    try:
+        user_input = request.query.strip()
+        if not user_input:
+            raise HTTPException(status_code=400, detail="Query cannot be empty")
+        
+        session_id = request.session_id or "default"
+        if session_id not in sessions:
+            sessions[session_id] = []
+        history = sessions[session_id]
+        
+        temporal_context = get_temporal_context()
+        result = await supervisor_agent.run(
+            f"{temporal_context}{user_input}",
+            deps=supervisor_deps,
+            message_history=history,
+            usage_limits=UsageLimits(request_limit=25, tool_calls_limit=15),
+        )
+        
+        response_text = str(result.output)
+        
+        history.append(ModelRequest(parts=[UserPromptPart(content=user_input)]))
+        history.append(ModelResponse(parts=[TextPart(content=response_text)]))
+        sessions[session_id] = keep_last_n_turns(history)
+        
+        return QueryResponse(
+            intent="supervisor",
+            response=response_text,
+            success=True,
+            status_updates=["Completed"]
+        )
+    
+    except Exception as e:
+        logger.error(f"❌ Error processing query: {e}", exc_info=True)
+        return QueryResponse(
+            intent="error",
+            response="",
+            success=False,
+            error=str(e)
+        )
+
+
+@app.post("/reset-history")
+async def reset_history(session_id: str = "default", username: str = Depends(check_auth)):
+    """Clear conversation history and pending confirmations."""
+    global sessions, pending_confirmations
+    if session_id in sessions:
+        sessions[session_id] = []
+    if session_id in pending_confirmations:
+        del pending_confirmations[session_id]
+    logger.info(f"🗑️ Session {session_id} cleared")
+    return {"status": "success", "message": f"History cleared for session {session_id}"}
+
+@app.get("/schema")
+async def get_schema():
+    if supervisor_deps:
+        return {
+            "schema": supervisor_deps.schema_text,
+            "status": "available" if supervisor_deps.schema_text != "Schema unavailable." else "unavailable",
+            "approved_databases": supervisor_deps.approved_databases,
+            "default_database": supervisor_deps.default_database
+        }
+    return {"schema": "Not initialized", "status": "unavailable"}
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "agents": {
+            "supervisor": "ready",
+            "email": "ready",
+            "sql": "ready",
+            "drive": "ready",
+            "calendar": "ready",
+            "jira": "ready",
+            "general": "ready"
+        },
+        "mcp_servers": {
+            "mysql": "connected",
+            "calendar": "connected",
+            "drive": "connected",
+            "jira": "connected",
+            "rag": "connected"
+        },
+        "schema_loaded": supervisor_deps is not None and supervisor_deps.schema_text != "Schema unavailable."
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001, reload=False)
+
+
+=== app.py ===
+NOT FOUND (HTTP 404)
+
+=== requirements.txt ===
+pydantic_ai
+fastmcp
+pymysql
+python-dotenv
+fastapi
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+uvicorn
+google-genai
+pinecone
+cohere
+langfuse
+jira
+python-dateutil
+numpy
+slack-bolt
+slack-sdk
+aiohttp
+
+
+=== package.json ===
+NOT FOUND (HTTP 404)
+
+=== .env.example ===
+NOT FOUND (HTTP 404)

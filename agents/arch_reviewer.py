@@ -8,7 +8,7 @@ except FileNotFoundError:
 
 arch_reviewer = create_deep_agent(
     name="ArchitectReview",
-    model="claude-sonnet-4-6",
+    model="claude-haiku-4-5",
     system_prompt=system_prompt,
     tools=["read_file"]
 )

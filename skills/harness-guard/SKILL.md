@@ -14,13 +14,13 @@ Audits AI agent implementations for four key dimensions of production readiness:
 Execute the following workflow sequentially:
 
 - [ ] **Step 1: Security Scan** — check for prompt injection exposure, especially user or tool output being interpolated directly into system prompts.
-> **Conditional Trigger**: Read `references/prompt-injection-checks.md` during Step 1 for injection patterns.
+> **Conditional Trigger**: Read `skills/harness-guard/references/prompt-injection-checks.md` during Step 1 for injection patterns.
 - [ ] **Step 2: Reliability Check** — check for unbounded retries, recursive delegation, or missing depth counters that create loops.
-> **Conditional Trigger**: Read `references/reliability-checks.md` during Step 2.
+> **Conditional Trigger**: Read `skills/harness-guard/references/reliability-checks.md` during Step 2.
 - [ ] **Step 3: Observability Check** — check for missing traces, no per-tool logs, no per-run token accounting, and no eval hooks.
-> **Conditional Trigger**: Read `references/observability-checklist.md` during Step 3.
+> **Conditional Trigger**: Read `skills/harness-guard/references/observability-checklist.md` during Step 3.
 - [ ] **Step 4: Cost Check** — check for cost blowups from oversized tool outputs, expensive default models, and missing token budgets or truncation rules.
-> **Conditional Trigger**: Read `references/cost-controls.md` during Step 4.
+> **Conditional Trigger**: Read `skills/harness-guard/references/cost-controls.md` during Step 4.
 - [ ] **Step 5: Output JSON** — format and return the structured JSON object matching the schema below.
 
 ## Critical Rules
@@ -32,7 +32,7 @@ Execute the following workflow sequentially:
 > Record a **HIGH** finding if user input is interpolated into a system prompt without explicit escaping or boundary fencing.
 
 - **NEVER** guess — if you cannot find evidence of an observability trace or token budget, report it as absent.
-- **ALWAYS** return the JSON structure directly to the caller.
+- **ALWAYS** return the JSON structure directly to the caller — do NOT write it to disk.
 
 ## Output Schema
 
