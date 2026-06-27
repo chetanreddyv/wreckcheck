@@ -1,5 +1,5 @@
 ---
-name: architecture_reviewer
+name: architecture-reviewer
 description: >
   Reviews agent skill architecture for spec compliance, structural quality,
   and multi-agent design validity. Use when asked to review a SKILL.md file,
@@ -138,8 +138,6 @@ A production-grade skill must demonstrate Agent Development Lifecycle (ADLC) rig
 
 When concluding the architecture review, return a structured JSON object exactly matching this schema.
 
-> **Conditional Trigger**: Read `assets/review-output-template.json` when preparing the final review report to ensure exact structural alignment.
-
 ```json
 {
   "agent": "ArchitectReview",
@@ -161,6 +159,7 @@ When concluding the architecture review, return a structured JSON object exactly
     "architecture": { "score": 0, "max": 20, "findings": [] }
   },
   "top_gaps": [],
+  "top_fixes": [],
   "recommendation": "<approve | revise and resubmit | block>"
 }
 ```

@@ -1,6 +1,6 @@
 ---
 name: code-auditor
-description: "Use when CodeSentinel needs to audit a codebase for enterprise readiness. Scans line-by-line for secrets, security hygiene, dependency supply chain risks, observability gaps, eval harness presence, license compliance, and CI/CD hardening. Returns structured JSON findings directly. Triggered by Scout orchestrator in the WreckCheck multi-agent pipeline."
+description: "Use when CodeSentinel needs to audit a codebase for enterprise readiness. Scans line-by-line for secrets, security hygiene, dependency supply chain risks, observability gaps, license compliance, and CI/CD hardening. Returns structured JSON findings directly. Triggered by Scout orchestrator in the WreckCheck multi-agent pipeline."
 license: MIT
 metadata:
   author: WreckCheck
@@ -19,7 +19,6 @@ to calibrate finding severity.
 
 - Auditing a GitHub repo's code for enterprise readiness as part of the WreckCheck pipeline
 - Identifying hardcoded secrets, missing licenses, absent test harnesses, poor observability
-- Surfacing OWASP Agentic Top 10 risks in AI agent codebases specifically
 - Returning a structured JSON output directly to the orchestrator
 
 ## Audit Workflow
@@ -34,9 +33,7 @@ Execute the following workflow sequentially:
 - [ ] **Step 5: Test Harness Check** — look for `tests/`, `evals/`, `pytest`, `unittest`, test CI jobs.
 - [ ] **Step 6: License Check** — verify `LICENSE` file exists; check `requirements.txt` for license-incompatible deps.
 - [ ] **Step 7: CI/CD Hardening** — check `.github/workflows/` for pinned actions, permissions declarations, secret injection patterns.
-- [ ] **Step 8: AI-Specific Checks** — for agent repos: prompt injection guards, tool confirmation bypasses, eval harness presence.
-> **Conditional Trigger**: Read `references/owasp-agentic-checks.md` during Step 8 for AI-agent-specific risk patterns.
-- [ ] **Step 9: Score & Output** — return findings as a structured JSON object matching the output schema.
+- [ ] **Step 8: Score & Output** — return findings as a structured JSON object matching the output schema.
 > **Conditional Trigger**: Read `references/severity-levels.md` before scoring to calibrate finding severity, and `references/output-template.md` to see a complete well-formed output example.
 
 ## Critical Rules

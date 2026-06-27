@@ -35,9 +35,19 @@ Here is a breakdown of what each agent in the system currently does, their input
   4. **Architecture**: Preventing agent circular delegation, checking model rationale, and ADLC evidence.
 - **Output**: A structured JSON object scoring these 4 dimensions (0-20 each) with specific findings.
 
-## 4. ReadinessScorer (Scorer)
+## 4. HarnessGuard (Agent Safety Guard)
+**Role**: The AI-specific security and production readiness validator.
+- **Input**: Raw repository files (`repo_contents.txt`).
+- **Actions**: Evaluates the codebase and agent setup across 4 dimensions:
+  1. **Security**: Prompt injection exposure, unsafe tool boundaries.
+  2. **Reliability**: Unbounded loops, missing max_steps, recursive delegation.
+  3. **Observability**: Missing traces, no token accounting, lack of eval hooks.
+  4. **Cost**: Oversized tool outputs, missing token budgets, expensive default models.
+- **Output**: A structured JSON object scoring these 4 dimensions (0-20 each) with specific findings natively returned to the orchestrator.
+
+## 5. ReadinessScorer (Scorer)
 **Role**: The synthesizer and report generator.
-- **Input**: Two JSON objects (one from CodeSentinel, one from ArchitectReview).
+- **Input**: Three JSON objects (from CodeSentinel, ArchitectReview, and HarnessGuard).
 - **Actions**: *Intended* to aggregate the scores, apply global policies or weightings, and format the final executive summary. 
 - **Output**: A final Markdown report containing the overall Enterprise Readiness score and top prioritized gaps.
 
@@ -50,7 +60,7 @@ Here is a breakdown of what each agent in the system currently does, their input
 > The Python agent is wired up, but the actual prompt and instructions for how to parse the JSON and calculate the final score are missing.
 
 ### 1. What's Missing?
-- **ReadinessScorer SKILL.md**: We need to write the instructions on how it aggregates the 0-100 score from CodeSentinel and the 0-80 score from ArchitectReview. How are they weighted? What does the final Markdown template look like?
+- **ReadinessScorer SKILL.md**: We need to write the instructions on how it aggregates the 100-point score from CodeSentinel, the 80-point score from ArchitectReview, and the 80-point score from HarnessGuard. How are they weighted? What does the final Markdown template look like?
 - **File Fetching Logic Limitation**: Scout currently only looks for hardcoded files (`main.py`, `app.py`, `SKILL.md`). If a repo uses `agent.py` or `src/index.ts`, Scout will miss it. We should eventually give Scout a dynamic directory-listing tool instead of a static list.
 
 ### 2. Redundancies?
@@ -58,5 +68,4 @@ Here is a breakdown of what each agent in the system currently does, their input
 
 ### 3. What to add next?
 1. **Flesh out `ReadinessScorer`**: Create its `SKILL.md`, define the final scoring formula, and give it a Markdown template (`assets/report-template.md`).
-2. **Add a "Security Validator" (Optional)**: If you want deeper AI-specific security, we could add a third parallel agent (`PromptGuard`) that specifically looks at prompt injection vulnerabilities in the code, rather than lumping it into CodeSentinel's step 8.
-3. **Reference Files**: We reference files like `hygiene-checklist.md` and `owasp-agentic-checks.md` in `code-auditor`, but we need to ensure those markdown files actually exist and contain the detailed rules.
+2. **Reference Files**: We reference files like `hygiene-checklist.md` in `code-auditor`, but we need to ensure those markdown files actually exist and contain the detailed rules (we just added the ones for `harness-guard`).
