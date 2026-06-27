@@ -1,7 +1,7 @@
 from deepagents import create_deep_agent
 
 try:
-    with open("readiness-scorer/SKILL.md", "r") as f:
+    with open("skills/readiness-scorer/SKILL.md", "r") as f:
         system_prompt = f.read()
 except FileNotFoundError:
     system_prompt = "Read /workspace/code_audit.json and /workspace/arch_review.json. Produce final report at /workspace/report.md"
