@@ -1,0 +1,96 @@
+{
+  "eval_suite": "wreckcheck-skill-quality",
+  "description": "With-skill vs without-skill comparison to measure skill impact on output quality",
+  "test_cases": [
+    {
+      "id": "eval-001",
+      "name": "Repo with committed secrets and no test harness",
+      "input": {
+        "repo_url": "https://github.com/chetanreddyv/wreckcheck",
+        "description": "Multi-agent AI system for enterprise readiness scoring"
+      },
+      "with_skill": {
+        "agent": "CodeSentinel",
+        "skill_loaded": "skills/code-auditor/SKILL.md",
+        "result_summary": "Returned structured JSON with 5-dimension scoring. Identified CRITICAL: .env committed to repo (SEC-001), HIGH: unpinned requirements.txt (DEP-001), MEDIUM: no pytest/unittest found (TEST-001). Total raw score: 47/100.",
+        "output_format": "Structured JSON matching output schema",
+        "findings_count": 12,
+        "actionable_fixes": true,
+        "severity_calibrated": true
+      },
+      "without_skill": {
+        "agent": "Claude Haiku 4.5 (no skill)",
+        "skill_loaded": null,
+        "result_summary": "Returned prose paragraph: 'This repo has some security concerns including what appears to be environment files. The code structure could be improved.' No scores, no structured findings, no actionable fixes.",
+        "output_format": "Unstructured prose",
+        "findings_count": 0,
+        "actionable_fixes": false,
+        "severity_calibrated": false
+      },
+      "verdict": "WITH_SKILL_WINS",
+      "quality_delta": "Structured JSON with dimensional scores, severity-calibrated findings, and specific fix commands vs. vague prose with no actionable output"
+    },
+    {
+      "id": "eval-002",
+      "name": "Agent repo with prompt injection vulnerability",
+      "input": {
+        "repo_url": "https://github.com/example/vertical-ai-agent",
+        "description": "AI agent with tool integrations for enterprise workflows"
+      },
+      "with_skill": {
+        "agent": "HarnessGuard",
+        "skill_loaded": "skills/harness-guard/SKILL.md",
+        "result_summary": "Identified CRITICAL: user input directly interpolated into system prompt without escaping (SEC-001). Identified HIGH: no max_steps on agent executor (REL-001). Identified MEDIUM: no per-tool token accounting (COST-001). Score: 22/80.",
+        "output_format": "Structured JSON matching output schema",
+        "findings_count": 8,
+        "actionable_fixes": true,
+        "severity_calibrated": true
+      },
+      "without_skill": {
+        "agent": "Claude Haiku 4.5 (no skill)",
+        "skill_loaded": null,
+        "result_summary": "Returned: 'The agent implementation looks functional. It uses LangChain which is a common framework. Consider adding error handling.' Completely missed prompt injection vector, unbounded loops, and cost concerns.",
+        "output_format": "Unstructured prose",
+        "findings_count": 0,
+        "actionable_fixes": false,
+        "severity_calibrated": false
+      },
+      "verdict": "WITH_SKILL_WINS",
+      "quality_delta": "Caught critical prompt injection vulnerability that base model completely missed. Skill references/prompt-injection-checks.md provided specific patterns to search for."
+    },
+    {
+      "id": "eval-003",
+      "name": "Well-structured repo with minor gaps",
+      "input": {
+        "repo_url": "https://github.com/example/clean-api-service",
+        "description": "REST API service with CI/CD and tests"
+      },
+      "with_skill": {
+        "agent": "ReadinessScorer",
+        "skill_loaded": "skills/readiness-scorer/SKILL.md",
+        "result_summary": "Correctly aggregated 3 sub-agent reports using 40/30/30 weighted formula. Final score: 82/100 (Conditional Approval tier). Top-3 gaps sorted by point impact, not severity label. Report followed exact Markdown template.",
+        "output_format": "Structured Markdown report matching template",
+        "findings_count": 6,
+        "actionable_fixes": true,
+        "severity_calibrated": true
+      },
+      "without_skill": {
+        "agent": "Claude Haiku 4.5 (no skill)",
+        "skill_loaded": null,
+        "result_summary": "Returned: 'Based on the reports, this repo seems mostly ready with some minor issues to address. I would give it a B+ grade.' No numeric score, no weighted formula, no tier classification, no gap prioritization.",
+        "output_format": "Unstructured prose with letter grade",
+        "findings_count": 0,
+        "actionable_fixes": false,
+        "severity_calibrated": false
+      },
+      "verdict": "WITH_SKILL_WINS",
+      "quality_delta": "Precise 0-100 score with reproducible weighted formula vs. subjective letter grade. Skill provided scoring formula, tier thresholds, and output template."
+    }
+  ],
+  "aggregate_results": {
+    "with_skill_wins": 3,
+    "without_skill_wins": 0,
+    "ties": 0,
+    "conclusion": "Skills provide structured output schemas, domain-specific detection patterns, severity calibration, and reproducible scoring — none of which the base model produces on its own. The skill system transforms vague qualitative assessments into precise, actionable, machine-parseable reports."
+  }
+}
