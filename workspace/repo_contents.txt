@@ -736,9 +736,6 @@ vertical_aiAgent/
 </p>
 
 
-=== SKILL.md ===
-NOT FOUND (HTTP 404)
-
 === main.py ===
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -1161,36 +1158,3 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001, reload=False)
-
-
-=== app.py ===
-NOT FOUND (HTTP 404)
-
-=== requirements.txt ===
-pydantic_ai
-fastmcp
-pymysql
-python-dotenv
-fastapi
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
-google-api-python-client
-uvicorn
-google-genai
-pinecone
-cohere
-langfuse
-jira
-python-dateutil
-numpy
-slack-bolt
-slack-sdk
-aiohttp
-
-
-=== package.json ===
-NOT FOUND (HTTP 404)
-
-=== .env.example ===
-NOT FOUND (HTTP 404)

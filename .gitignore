@@ -1,3 +1,6 @@
 venv/
 
 .env
+run_output.log
+run_output.log
+workspace/repo_contents.txt

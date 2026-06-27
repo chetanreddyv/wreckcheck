@@ -14,8 +14,7 @@ def fetch_repo_files(repo_url: str) -> str:
         repo_url = repo_url[:-4]
     base = repo_url.replace("https://github.com/", "https://api.github.com/repos/")
     headers = {"Accept": "application/vnd.github.v3+json"}
-    target_files = ["README.md", "SKILL.md", "main.py", "app.py",
-                    "requirements.txt", "package.json", ".env.example"]
+    target_files = ["README.md", "main.py"]
     contents = []
     for f in target_files:
         try:
