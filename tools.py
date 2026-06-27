@@ -55,10 +55,14 @@ def write_file(path: str, content: str) -> str:
         return f"Error writing file: {str(e)}"
 
 @tool
-def search_files(query: str, directory: str = ".") -> str:
-    """Search for a string in files within a directory."""
+def search_files(query: str, directory: str = "./workspace") -> str:
+    """Search for a string in files within a directory. Defaults to ./workspace (the target repo contents)."""
     results = []
-    for root, _, files in os.walk(directory):
+    for root, dirs, files in os.walk(directory):
+        if 'venv' in dirs:
+            dirs.remove('venv')
+        if '.git' in dirs:
+            dirs.remove('.git')
         for file in files:
             if file.endswith(('.py', '.md', '.txt', '.json', '.js', '.ts')):
                 filepath = os.path.join(root, file)

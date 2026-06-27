@@ -21,12 +21,13 @@ Aggregate sub-agent outputs into a final 0–100 readiness score. Always wait fo
 
 ## Inputs Required
 
-Before scoring, confirm both of the following are available in the context:
+Before scoring, confirm all three of the following are available in the context:
 - [ ] **CodeSentinel output** — contains PASS / WARN / FAIL verdict + findings list.
 - [ ] **ArchitectReview output** — contains PASS / WARN / FAIL verdict + findings list.
+- [ ] **HarnessGuard output** — contains PASS / WARN / FAIL verdict + findings list.
 
 > [!IMPORTANT]
-> If either input is missing or incomplete, immediately return:
+> If any input is missing or incomplete, immediately return:
 > `"Scoring blocked — awaiting [missing agent] output."`
 > Do not attempt to calculate a score with partial inputs.
 
@@ -37,12 +38,13 @@ Before scoring, confirm both of the following are available in the context:
 Readiness scoring starts at a base baseline of **100 points** for each sub-category. Points are deducted based on the severity and source of each finding.
 
 ### Sub-Scores
-Calculate two sub-scores separately before combining:
-1. **Security Score (from CodeSentinel)**: Starts at 100. Deduct points for CodeSentinel findings. Weight: **60%**.
-2. **Architecture Score (from ArchitectReview)**: Starts at 100. Deduct points for ArchitectReview findings. Weight: **40%**.
+Calculate three sub-scores separately before combining:
+1. **Security Score (from CodeSentinel)**: Starts at 100. Deduct points for CodeSentinel findings. Weight: **40%**.
+2. **Architecture Score (from ArchitectReview)**: Starts at 100. Deduct points for ArchitectReview findings. Weight: **30%**.
+3. **Safety Score (from HarnessGuard)**: Starts at 100. Deduct points for HarnessGuard findings. Weight: **30%**.
 
 ### Final Score Formula
-$$\text{Final Score} = (\text{Security Score} \times 0.60) + (\text{Architecture Score} \times 0.40)$$
+$$\text{Final Score} = (\text{Security Score} \times 0.40) + (\text{Architecture Score} \times 0.30) + (\text{Safety Score} \times 0.30)$$
 
 > **Conditional Trigger**: Read `skills/readiness-scorer/references/scoring-formula.md` when executing point deductions, verifying deduction point tables per severity level, resolving scoring disputes, or mapping the final numeric score to its Readiness Tier label.
 
@@ -77,9 +79,10 @@ Generate the final evaluation using the exact structure below:
 ReadinessScorer Report: <project-name>
 ══════════════════════════════════════════════════════
 Final Score: [0–100] — <Tier Label>
-Security Score: [0–100] (weight: 60%)
-Architecture Score: [0–100] (weight: 40%)
-Total Findings: <n> across both agents
+Security Score: [0–100] (weight: 40%)
+Architecture Score: [0–100] (weight: 30%)
+Safety Score: [0–100] (weight: 30%)
+Total Findings: <n> across all agents
 ══════════════════════════════════════════════════════
 
 Score Breakdown:
@@ -89,6 +92,10 @@ Verdict: PASS / WARN / FAIL
 Deductions: -<n> pts (<finding count> findings)
 
 ArchitectReview Input:
+Verdict: PASS / WARN / FAIL
+Deductions: -<n> pts (<finding count> findings)
+
+HarnessGuard Input:
 Verdict: PASS / WARN / FAIL
 Deductions: -<n> pts (<finding count> findings)
 
