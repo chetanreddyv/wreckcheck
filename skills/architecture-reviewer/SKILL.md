@@ -91,7 +91,7 @@ Audit the skill for adherence to progressive disclosure principles:
 - **No Unconditional Loading**: `SKILL.md` must never instruct the agent to unconditionally read all reference files upon skill activation.
 - **Trigger Clarity**: Generic instructions such as *"see references/ for details"* without explicit trigger conditions result in a **MEDIUM** finding.
 
-> **Conditional Trigger**: Read [spec-compliance.md](file:///Users/jaswanthibanoth/Documents/github/wreckcheck/skills/architecture_reviewer/references/spec-compliance.md) if any progressive disclosure violations, frontmatter ambiguities, or structural discrepancies are found and require detailed ruling against the agentskills.io specification.
+> **Conditional Trigger**: Read [spec-compliance.md](file:///Users/jaswanthibanoth/Documents/github/wreckcheck/skills/architecture-reviewer/references/spec-compliance.md) if any progressive disclosure violations, frontmatter ambiguities, or structural discrepancies are found and require detailed ruling against the agentskills.io specification.
 
 ---
 
@@ -114,7 +114,7 @@ When evaluating multi-agent systems or complex workflows, verify delegation vali
 - **Directional Flow**: Task execution flows directionally without circular dependencies.
 - **No Duplication**: No two agents perform identical or competing functions.
 
-> **Conditional Trigger**: Read [delegation-patterns.md](file:///Users/jaswanthibanoth/Documents/github/wreckcheck/skills/architecture_reviewer/references/delegation-patterns.md) when evaluating multi-agent architectures, auditing complex multi-agent workflows, or diagnosing suspected circular or duplicate delegation patterns.
+> **Conditional Trigger**: Read [delegation-patterns.md](file:///Users/jaswanthibanoth/Documents/github/wreckcheck/skills/architecture-reviewer/references/delegation-patterns.md) when evaluating multi-agent architectures, auditing complex multi-agent workflows, or diagnosing suspected circular or duplicate delegation patterns.
 
 > [!CAUTION]
 > Record a **CRITICAL** finding if:
