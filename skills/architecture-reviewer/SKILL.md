@@ -14,7 +14,7 @@ allowed-tools: Read Glob Bash(grep:*)
 
 # Architecture Reviewer
 
-Review agent skills and multi-agent designs against the agentskills.io specification and architecture quality standards. Output a structured PASS / WARN / FAIL verdict.
+Review agent skills and multi-agent designs against the agentskills.io specification and architecture quality standards. Return a structured JSON report.
 
 ## Review Workflow
 
@@ -77,7 +77,7 @@ Evaluate folder organization and file placement:
 - **Reference Depth**: No deeply nested reference chains (maximum one level deep; e.g., `SKILL.md` may link to `references/doc.md`, but `references/doc.md` must not require loading further sub-references).
 
 > [!WARNING]
-> If a file or resource is placed in the wrong directory or violates path reference rules, record a **WARN** finding.
+> If a file or resource is placed in the wrong directory or violates path reference rules, record a **MEDIUM** finding.
 
 ---
 
@@ -89,7 +89,7 @@ Audit the skill for adherence to progressive disclosure principles:
 - **Core Visibility**: Core operational instructions must reside in `SKILL.md`, not hidden inside reference files.
 - **Conditional Loading**: Files in `references/` must only be loaded conditionally. `SKILL.md` must explicitly define **WHEN** and under what specific conditions an agent should read each reference file.
 - **No Unconditional Loading**: `SKILL.md` must never instruct the agent to unconditionally read all reference files upon skill activation.
-- **Trigger Clarity**: Generic instructions such as *"see references/ for details"* without explicit trigger conditions result in a **WARN**.
+- **Trigger Clarity**: Generic instructions such as *"see references/ for details"* without explicit trigger conditions result in a **MEDIUM** finding.
 
 > **Conditional Trigger**: Read [spec-compliance.md](file:///Users/jaswanthibanoth/Documents/github/wreckcheck/skills/architecture_reviewer/references/spec-compliance.md) if any progressive disclosure violations, frontmatter ambiguities, or structural discrepancies are found and require detailed ruling against the agentskills.io specification.
 
@@ -105,7 +105,7 @@ Each agent or skill within the architecture must clearly justify its design:
 - If a specialized or higher-capacity model is specified, what complexity justifies it?
 
 > [!WARNING]
-> Record a **WARN** finding if architecture rationale is missing, unstated, or vague.
+> Record a **HIGH** finding if architecture rationale is missing, unstated, or vague.
 
 ### Multi-Agent Delegation Validity
 When evaluating multi-agent systems or complex workflows, verify delegation validity:
@@ -117,7 +117,7 @@ When evaluating multi-agent systems or complex workflows, verify delegation vali
 > **Conditional Trigger**: Read [delegation-patterns.md](file:///Users/jaswanthibanoth/Documents/github/wreckcheck/skills/architecture_reviewer/references/delegation-patterns.md) when evaluating multi-agent architectures, auditing complex multi-agent workflows, or diagnosing suspected circular or duplicate delegation patterns.
 
 > [!CAUTION]
-> Record a **FAIL** finding if:
+> Record a **CRITICAL** finding if:
 > - Two agents claim the same responsibility.
 > - Delegation patterns are circular (e.g., Agent A → Agent B → Agent A).
 > - An agent receives no clear input specification or produces no defined output.
@@ -130,22 +130,47 @@ A production-grade skill must demonstrate Agent Development Lifecycle (ADLC) rig
 - Defined evaluation criteria or success metrics.
 
 > [!WARNING]
-> Record a **WARN** finding if ADLC design evidence is absent in a production-level skill.
+> Record a **MEDIUM** finding if ADLC design evidence is absent in a production-level skill.
 
 ---
 
-## Step 6 — Output Verdict and Reporting
+## Step 6 — JSON Output
 
-When concluding the architecture review, generate a structured evaluation report.
+When concluding the architecture review, return a structured JSON object exactly matching this schema.
 
-> **Conditional Trigger**: Read [review-output-template.md](file:///Users/jaswanthibanoth/Documents/github/wreckcheck/skills/architecture_reviewer/assets/review-output-template.md) when preparing the final review report to ensure exact structural alignment with standard review formatting.
+> **Conditional Trigger**: Read `assets/review-output-template.json` when preparing the final review report to ensure exact structural alignment.
 
-### Verdict Rules
+```json
+{
+  "agent": "ArchitectReview",
+  "version": "1.0.0",
+  "target": "<skill-name>",
+  "timestamp": "<ISO8601>",
+  "summary": {
+    "total_findings": 0,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "info": 0
+  },
+  "dimensions": {
+    "frontmatter": { "score": 0, "max": 20, "findings": [] },
+    "structure": { "score": 0, "max": 20, "findings": [] },
+    "disclosure": { "score": 0, "max": 20, "findings": [] },
+    "architecture": { "score": 0, "max": 20, "findings": [] }
+  },
+  "top_gaps": [],
+  "recommendation": "<approve | revise and resubmit | block>"
+}
+```
 
-Apply the following deterministic logic to assign the final review verdict:
+### Scoring Rules
+Each dimension starts at 20 points. Deduct per finding:
+- CRITICAL: −10
+- HIGH: −6
+- MEDIUM: −3
+- LOW: −1
+- INFO: 0
 
-| Condition | Verdict |
-| :--- | :--- |
-| No findings or only `[INFO]` observations | ✅ **PASS** |
-| Any `[WARN]` finding present (and no `[FAIL]` findings) | ⚠️ **WARN** |
-| Spec violation, circular delegation, or missing critical rationale | 🚨 **FAIL** |
+Floor is 0 per dimension. Total raw score = sum of 4 dimensions (0–80).

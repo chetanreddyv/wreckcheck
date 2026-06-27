@@ -4,7 +4,7 @@ try:
     with open("skills/readiness-scorer/SKILL.md", "r") as f:
         system_prompt = f.read()
 except FileNotFoundError:
-    system_prompt = "Read /workspace/code_audit.json and /workspace/arch_review.json. Produce final report at /workspace/report.md"
+    system_prompt = "Read the JSON reports provided from CodeSentinel and ArchitectReview to produce a final report."
 
 readiness_scorer = create_deep_agent(
     name="ReadinessScorer",

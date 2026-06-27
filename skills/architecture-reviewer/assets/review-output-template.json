@@ -1,25 +1,38 @@
-══════════════════════════════════════════════
-ArchitectReview Report: <skill-name>
-══════════════════════════════════════════════
-Verdict: ✅ PASS / ⚠️ WARN / 🚨 FAIL
-Files: <count>
-Findings: <count>
-══════════════════════════════════════════════
-
-Findings:
-
-[SEVERITY] <title>
-Section: <frontmatter | structure | disclosure | architecture>
-File: <path>:<line if applicable>
-Evidence: <what was found>
-Fix: <what to change>
-
-──────────────────────────────────────────────
-Top-3 Gaps:
-1. <most critical missing or broken item>
-2. <second>
-3. <third>
-
-Summary: <one paragraph>
-Recommendation: <approve / revise and resubmit / block>
-══════════════════════════════════════════════
+{
+  "agent": "ArchitectReview",
+  "version": "1.0.0",
+  "target": "<skill-name>",
+  "timestamp": "2026-06-27T12:00:00Z",
+  "summary": {
+    "total_findings": 1,
+    "critical": 0,
+    "high": 1,
+    "medium": 0,
+    "low": 0,
+    "info": 0
+  },
+  "dimensions": {
+    "frontmatter": { "score": 20, "max": 20, "findings": [] },
+    "structure": { "score": 20, "max": 20, "findings": [] },
+    "disclosure": { "score": 20, "max": 20, "findings": [] },
+    "architecture": { 
+      "score": 14, 
+      "max": 20, 
+      "findings": [
+        {
+          "id": "ARCH-001",
+          "severity": "HIGH",
+          "title": "Missing architecture rationale",
+          "file": "SKILL.md",
+          "line": null,
+          "evidence": "Model claude-sonnet-4-6 is selected but no rationale is provided for why this specific capacity is needed.",
+          "fix": "Add a paragraph explaining the reasoning for the model choice in the system design."
+        }
+      ] 
+    }
+  },
+  "top_gaps": [
+    "Architecture rationale for model selection is missing."
+  ],
+  "recommendation": "revise and resubmit"
+}

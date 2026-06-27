@@ -18,18 +18,17 @@ YOUR ONLY JOB:
    - Any .env.example or requirements.txt / package.json
    - Any ADLC worksheet or docs/ folder contents
 3. Write all fetched content to /workspace/repo_contents.txt
-4. Delegate to CodeSentinel: "Audit /workspace/repo_contents.txt for enterprise readiness issues. Write findings to /workspace/code_audit.json"
-5. Delegate to ArchitectReview: "Review /workspace/repo_contents.txt for architecture quality. Write findings to /workspace/arch_review.json"
-6. Wait for BOTH to complete.
-7. Delegate to ReadinessScorer: "Read /workspace/code_audit.json and /workspace/arch_review.json. Produce final report at /workspace/report.md"
-8. Read /workspace/report.md and return it as your final output.
+4. Delegate to CodeSentinel: "Audit /workspace/repo_contents.txt for enterprise readiness issues and return the structured JSON report."
+5. Delegate to ArchitectReview: "Review /workspace/repo_contents.txt for architecture quality and return the structured JSON report."
+6. Wait for BOTH CodeSentinel and ArchitectReview to return their JSON reports.
+7. Delegate to ReadinessScorer: "Analyze the following JSON reports from CodeSentinel and ArchitectReview to produce a final enterprise readiness report." (Pass the returned JSON objects as input).
+8. Return ReadinessScorer's final report as your final output.
 
 RULES:
 - Do NOT perform any auditing or scoring yourself.
 - Do NOT skip delegation — always route to the correct sub-agent.
-- Do NOT proceed to ReadinessScorer until BOTH CodeSentinel and ArchitectReview have written their output files.
+- Do NOT proceed to ReadinessScorer until BOTH CodeSentinel and ArchitectReview have returned their JSON responses.
 - If a file cannot be fetched from the repo, write "NOT FOUND" for that file in repo_contents.txt and continue.
-- Always confirm each sub-agent has written its output file before proceeding.
 """
 
 # --- Scout (Orchestrator) ---

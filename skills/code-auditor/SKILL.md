@@ -1,6 +1,6 @@
 ---
 name: code-auditor
-description: "Use when CodeSentinel needs to audit a codebase for enterprise readiness. Scans line-by-line for secrets, security hygiene, dependency supply chain risks, observability gaps, eval harness presence, license compliance, and CI/CD hardening. Outputs structured JSON findings to /workspace/code_audit.json. Triggered by Scout orchestrator in the WreckCheck multi-agent pipeline."
+description: "Use when CodeSentinel needs to audit a codebase for enterprise readiness. Scans line-by-line for secrets, security hygiene, dependency supply chain risks, observability gaps, eval harness presence, license compliance, and CI/CD hardening. Returns structured JSON findings directly. Triggered by Scout orchestrator in the WreckCheck multi-agent pipeline."
 license: MIT
 metadata:
   author: WreckCheck
@@ -20,31 +20,42 @@ to calibrate finding severity.
 - Auditing a GitHub repo's code for enterprise readiness as part of the WreckCheck pipeline
 - Identifying hardcoded secrets, missing licenses, absent test harnesses, poor observability
 - Surfacing OWASP Agentic Top 10 risks in AI agent codebases specifically
-- Producing structured JSON output for ReadinessScorer to consume
+- Returning a structured JSON output directly to the orchestrator
 
 ## Audit Workflow
 
-1. **Inventory** — list all files; note languages, entry points, config files, CI workflows
-2. **Secrets Scan** — grep for hardcoded credentials, exposed `.env` files, API keys in code
-3. **Dependency Check** — inspect `requirements.txt`, `package.json`, `composer.json` for unpinned or absent versions
-4. **Observability Check** — look for logging, error handling, metrics instrumentation
-5. **Test Harness Check** — look for `tests/`, `evals/`, `pytest`, `unittest`, test CI jobs
-6. **License Check** — verify `LICENSE` file exists; check `requirements.txt` for license-incompatible deps
-7. **CI/CD Hardening** — check `.github/workflows/` for pinned actions, permissions declarations, secret injection patterns
-8. **AI-Specific Checks** — for agent repos: prompt injection guards, tool confirmation bypasses, eval harness presence
-9. **Score & Output** — write findings to `/workspace/code_audit.json` using the output schema below
+Execute the following workflow sequentially:
+
+- [ ] **Step 1: Inventory** — list all files; note languages, entry points, config files, CI workflows.
+> **Conditional Trigger**: Read `references/hygiene-checklist.md` before starting the inventory to understand the full per-dimension checklist.
+- [ ] **Step 2: Secrets Scan** — grep for hardcoded credentials, exposed `.env` files, API keys in code.
+- [ ] **Step 3: Dependency Check** — inspect `requirements.txt`, `package.json`, `composer.json` for unpinned or absent versions.
+- [ ] **Step 4: Observability Check** — look for logging, error handling, metrics instrumentation.
+- [ ] **Step 5: Test Harness Check** — look for `tests/`, `evals/`, `pytest`, `unittest`, test CI jobs.
+- [ ] **Step 6: License Check** — verify `LICENSE` file exists; check `requirements.txt` for license-incompatible deps.
+- [ ] **Step 7: CI/CD Hardening** — check `.github/workflows/` for pinned actions, permissions declarations, secret injection patterns.
+- [ ] **Step 8: AI-Specific Checks** — for agent repos: prompt injection guards, tool confirmation bypasses, eval harness presence.
+> **Conditional Trigger**: Read `references/owasp-agentic-checks.md` during Step 8 for AI-agent-specific risk patterns.
+- [ ] **Step 9: Score & Output** — return findings as a structured JSON object matching the output schema.
+> **Conditional Trigger**: Read `references/severity-levels.md` before scoring to calibrate finding severity, and `references/output-template.md` to see a complete well-formed output example.
 
 ## Critical Rules
 
-- **NEVER** skip a dimension — if a file is missing (e.g., no LICENSE), that IS a finding
-- **ALWAYS** check `.env` against `.gitignore` — committed `.env` = CRITICAL finding
-- **ALWAYS** check `requirements.txt` for pinned versions; floating `>=` deps = MEDIUM
-- **NEVER** guess — if you cannot find evidence of a control, report it as absent
-- **ALWAYS** write output to `/workspace/code_audit.json` — do not print to stdout only
+> [!IMPORTANT]
+> **NEVER** skip a dimension — if a file is missing (e.g., no LICENSE), that IS a finding.
+
+> [!CAUTION]
+> **ALWAYS** check `.env` against `.gitignore` — committed `.env` = CRITICAL finding.
+
+> [!WARNING]
+> **ALWAYS** check `requirements.txt` for pinned versions; floating `>=` deps = MEDIUM finding.
+
+- **NEVER** guess — if you cannot find evidence of a control, report it as absent.
+- **ALWAYS** return the structured JSON directly — do NOT write it to disk or print to stdout only.
 
 ## Output Schema
 
-Write a JSON file at `/workspace/code_audit.json` matching this schema exactly:
+Return a JSON object as your final response matching this schema exactly:
 
 ```json
 {
@@ -96,12 +107,3 @@ Each dimension scores 0–20. Start at 20, deduct per finding:
 - INFO: 0 (no deduction)
 
 Floor is 0. Total raw score = sum of 5 dimensions (0–100).
-
-## References
-
-| Reference | Use |
-|-----------|-----|
-| `references/hygiene-checklist.md` | Always — full per-dimension checklist |
-| `references/severity-levels.md` | Calibrating finding severity |
-| `references/owasp-agentic-checks.md` | AI-agent-specific risk patterns |
-| `references/output-template.md` | Example of a complete well-formed output |
