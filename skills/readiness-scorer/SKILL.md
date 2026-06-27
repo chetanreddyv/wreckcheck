@@ -8,7 +8,7 @@ description: >
   pipeline — after code audit and architecture review are complete.
 license: MIT
 metadata:
-  author: your-org
+  author: Wreckcheck
   version: "1.0.0"
 allowed-tools: Read
 ---
