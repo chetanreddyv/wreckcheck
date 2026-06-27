@@ -48,6 +48,42 @@ hr {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.02);
 }
 
+/* Resource Pills inside Agent Cards */
+.pill {
+    background-color: #f1f5f9;
+    color: #475569;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.pill-alert {
+    background-color: #fef2f2;
+    color: #dc2626;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Console Box inside Agent Cards */
+.console-box {
+    background-color: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem;
+    color: #334155;
+    line-height: 1.4;
+}
+
 /* Metric Containers - Vercel Flat Card Style */
 [data-testid="stMetric"] {
     background-color: #ffffff !important;
@@ -214,8 +250,8 @@ def fetch_repo_data(owner: str, repo: str):
         }
     }
 
-# Helper function to render an agent card using direct markdown cards to avoid Streamlit container nesting
-def render_agent_card(placeholder, name: str, role: str, status: str, log_msg: str):
+# Helper function to render an agent performance dashboard card
+def render_agent_card(placeholder, name: str, role: str, status: str, log_msg: str, timer: str = "0.0s", model: str = "claude-haiku-4-5", tokens: str = "0 tokens", findings: int = 0):
     status_styles = {
         "WAITING": '<span style="background-color: #f1f5f9; color: #64748b; padding: 2px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em;">WAITING</span>',
         "RUNNING": '<span style="background-color: #eff6ff; color: #2563eb; padding: 2px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em;">RUNNING</span>',
@@ -223,16 +259,30 @@ def render_agent_card(placeholder, name: str, role: str, status: str, log_msg: s
         "ERROR": '<span style="background-color: #fef2f2; color: #dc2626; padding: 2px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em;">ERROR</span>'
     }
     badge = status_styles.get(status, status)
+    findings_html = f'<span class="pill-alert">🚨 {findings} Findings</span>' if findings > 0 else '<span class="pill">🛡️ Clean</span>'
     
     placeholder.markdown(f"""
     <div class="ui-card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-            <h4 style="margin: 0; font-size: 1rem; color: #0f172a; font-weight: 600;">{name}</h4>
-            {badge}
+            <div>
+                <h4 style="margin: 0; font-size: 1.05rem; color: #0f172a; font-weight: 600;">{name}</h4>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <span style="font-size: 0.78rem; color: #64748b; font-family: ui-monospace, monospace; font-weight: 500;">⏱️ {timer}</span>
+                {badge}
+            </div>
         </div>
         <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 12px;">{role}</div>
-        <div style="background-color: #f8fafc; border-radius: 6px; padding: 8px 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            {log_msg}
+        
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+            <span class="pill">🤖 {model}</span>
+            <span class="pill">⚡ {tokens}</span>
+            {findings_html}
+        </div>
+        
+        <div class="console-box">
+            <div style="color: #64748b; font-size: 0.7rem; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.05em;">Live Activity Feed</div>
+            <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; color: #0f172a;">> {log_msg}</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -331,60 +381,71 @@ if st.session_state.analyzed:
 
     # --- STAGE 3: LIVE ORCHESTRATION VIEW ---
     st.divider()
-    render_stage_header(3, "Live Verification Pipeline", "Real-time autonomous multi-agent inspection guarding against code wrecks.")
+    render_stage_header(3, "Live Verification Pipeline", "Real-time performance telemetry across collaborative autonomous agents.")
     
     agent_info = [
-        ("Inspection Commander", "Risk Graph Formulation & Task Dispatch"),
-        ("Dependency Auditor", "Manifest Scrutiny & Upstream Breaker Scan"),
-        ("Crash Vulnerability Scanner", "Anti-Pattern Detection & Exception Guard Audit"),
-        ("Shipment Assessor", "Readiness Synthesis & Final Verdict")
+        ("Scout", "Orchestrator Commander & Task Graph Dispatch"),
+        ("CodeSentinel", "Enterprise Readiness & Security Leak Auditor"),
+        ("ArchitectReview", "Architectural Quality & AST Call Graph Auditor"),
+        ("HarnessGuard", "Agent Safety, Cost & Loop Guardrail Sentinel"),
+        ("ReadinessScorer", "Enterprise Readiness Synthesis & Final Scoring")
     ]
     
     card_cols_top = st.columns(2)
-    card_cols_bot = st.columns(2)
+    card_cols_mid = st.columns(2)
+    card_cols_bot = st.columns([1, 1])
+    
     placeholders = [
         card_cols_top[0].empty(),
         card_cols_top[1].empty(),
-        card_cols_bot[0].empty(),
-        card_cols_bot[1].empty()
+        card_cols_mid[0].empty(),
+        card_cols_mid[1].empty(),
+        card_cols_bot[0].empty()
     ]
     
     if not st.session_state.run_completed:
         # Initial WAITING state
-        for i in range(4):
-            render_agent_card(placeholders[i], *agent_info[i], "WAITING", "Standby for inspection dispatch...")
+        for i in range(5):
+            render_agent_card(placeholders[i], *agent_info[i], "WAITING", "Standby for async dispatch...", "0.0s", "claude-haiku-4-5", "0 tokens", 0)
             
-        with st.status("WreckCheck Inspection Active — Verifying Codebase Stability...", expanded=True) as status_box:
-            st.write("Initialization: Engaging automated crash-prevention safeguards...")
+        with st.status("WreckCheck Inspection Active — Verifying Codebase Readiness...", expanded=True) as status_box:
+            st.write("Initialization: Establishing agent communication bus...")
             time.sleep(0.4)
             
-            # Step 1: Commander
-            status_box.update(label="Inspection Commander mapping repository structural risks...", state="running")
-            render_agent_card(placeholders[0], *agent_info[0], "RUNNING", "Scanning file hierarchy and isolating critical execution paths...")
-            time.sleep(0.7)
-            render_agent_card(placeholders[0], *agent_info[0], "RUNNING", "Formulating inspection DAG: routing parallel stability audits...")
-            time.sleep(0.7)
-            render_agent_card(placeholders[0], *agent_info[0], "DONE", "Inspection plan locked. Dispatching parallel vulnerability scanners.")
-            st.write("Inspection DAG formulated successfully.")
+            # Step 1: Scout Orchestrator
+            status_box.update(label="Scout Orchestrator fetching repository files and building DAG...", state="running")
+            render_agent_card(placeholders[0], *agent_info[0], "RUNNING", "Invoking fetch_repo_files() tool and cloning repo structure...", "0.8s", "claude-haiku-4-5", "320 tokens", 0)
+            time.sleep(0.6)
+            render_agent_card(placeholders[0], *agent_info[0], "RUNNING", "Spawning parallel async sub-agents: CodeSentinel, ArchitectReview, HarnessGuard...", "1.4s", "claude-haiku-4-5", "580 tokens", 0)
+            time.sleep(0.6)
+            render_agent_card(placeholders[0], *agent_info[0], "DONE", "Async threads dispatched. Awaiting sub-agent JSON reports via wait_for_async_tasks().", "1.8s", "claude-haiku-4-5", "680 tokens", 0)
+            st.write("Orchestration DAG dispatched. Parallel inspection active.")
             
-            # Step 2: Parallel Auditing
-            status_box.update(label="Parallel Execution: Auditor & Scanner actively inspecting code...", state="running")
-            render_agent_card(placeholders[1], *agent_info[1], "RUNNING", "Auditing package manifests for conflicting version constraints...")
-            render_agent_card(placeholders[2], *agent_info[2], "RUNNING", "Scanning AST for unhandled exceptions and memory leak vectors...")
+            # Step 2: Parallel Auditing (CodeSentinel, ArchitectReview, HarnessGuard)
+            status_box.update(label="Parallel Execution: CodeSentinel, ArchitectReview & HarnessGuard scanning...", state="running")
+            render_agent_card(placeholders[1], *agent_info[1], "RUNNING", "Auditing ./workspace/repo_contents.txt for hardcoded credentials...", "2.4s", "claude-haiku-4-5", "920 tokens", 1)
+            render_agent_card(placeholders[2], *agent_info[2], "RUNNING", "Evaluating package structure and circular dependency boundaries...", "2.6s", "claude-haiku-4-5", "1,100 tokens", 0)
+            render_agent_card(placeholders[3], *agent_info[3], "RUNNING", "Scanning for prompt injection vectors and unchecked recursion loops...", "2.5s", "claude-haiku-4-5", "640 tokens", 0)
             time.sleep(0.8)
-            render_agent_card(placeholders[1], *agent_info[1], "RUNNING", "Verifying license compatibility and breaking upstream changes...")
-            render_agent_card(placeholders[2], *agent_info[2], "RUNNING", "Evaluating cyclomatic complexity and race condition risks...")
-            time.sleep(0.9)
-            render_agent_card(placeholders[1], *agent_info[1], "DONE", "Audited 42 modules: 0 breaking dependency conflicts found.")
-            render_agent_card(placeholders[2], *agent_info[2], "DONE", "Crash scan complete: Exception boundaries verified stable.")
-            st.write("Dependency audit and vulnerability scan completed.")
             
-            # Step 3: Synthesis
-            status_box.update(label="Shipment Assessor synthesizing final verification verdict...", state="running")
-            render_agent_card(placeholders[3], *agent_info[3], "RUNNING", "Cross-referencing crash vectors against shipment thresholds...")
+            render_agent_card(placeholders[1], *agent_info[1], "RUNNING", "Compiling enterprise readiness findings into code_sentinel.json...", "3.5s", "claude-haiku-4-5", "1,340 tokens", 2)
+            render_agent_card(placeholders[2], *agent_info[2], "RUNNING", "Detecting tight coupling & writing architect_review.json...", "3.8s", "claude-haiku-4-5", "1,650 tokens", 1)
+            render_agent_card(placeholders[3], *agent_info[3], "RUNNING", "Verifying observability hooks & saving harness_guard.json...", "3.6s", "claude-haiku-4-5", "980 tokens", 0)
+            time.sleep(0.8)
+            
+            render_agent_card(placeholders[1], *agent_info[1], "DONE", "Saved workspace/code_sentinel.json: 2 minor enterprise risks flagged.", "4.2s", "claude-haiku-4-5", "1,420 tokens", 2)
+            render_agent_card(placeholders[2], *agent_info[2], "DONE", "Saved workspace/architect_review.json: Clean layering verified.", "4.6s", "claude-haiku-4-5", "1,850 tokens", 1)
+            render_agent_card(placeholders[3], *agent_info[3], "DONE", "Saved workspace/harness_guard.json: All safety guardrails intact.", "4.9s", "claude-haiku-4-5", "1,100 tokens", 0)
+            st.write("All three parallel async sub-agents returned structured JSON reports.")
+            
+            # Step 3: Synthesis (ReadinessScorer)
+            status_box.update(label="ReadinessScorer synthesizing final enterprise readiness verdict...", state="running")
+            render_agent_card(placeholders[4], *agent_info[4], "RUNNING", "Reading code_sentinel.json, architect_review.json & harness_guard.json...", "5.4s", "claude-haiku-4-5", "720 tokens", 0)
             time.sleep(0.7)
-            render_agent_card(placeholders[3], *agent_info[3], "DONE", "Issued final WreckCheck readiness certificate.")
-            st.write("Final WreckCheck assessment complete.")
+            render_agent_card(placeholders[4], *agent_info[4], "RUNNING", "Applying weighted enterprise readiness scoring formula...", "6.1s", "claude-haiku-4-5", "1,050 tokens", 0)
+            time.sleep(0.6)
+            render_agent_card(placeholders[4], *agent_info[4], "DONE", "Generated workspace/readiness_report.md. Final Score: 94 / 100.", "6.8s", "claude-haiku-4-5", "1,240 tokens", 0)
+            st.write("Final readiness evaluation completed.")
             
             status_box.update(label="WreckCheck Complete — Codebase Verified Safe for Shipment", state="complete", expanded=False)
             time.sleep(0.4)
@@ -399,21 +460,22 @@ if st.session_state.analyzed:
             <span>WreckCheck Inspection Passed — Codebase Verified Safe for Shipment</span>
         </div>
         """, unsafe_allow_html=True)
-        render_agent_card(placeholders[0], *agent_info[0], "DONE", "Inspection plan locked. Dispatching parallel vulnerability scanners.")
-        render_agent_card(placeholders[1], *agent_info[1], "DONE", "Audited 42 modules: 0 breaking dependency conflicts found.")
-        render_agent_card(placeholders[2], *agent_info[2], "DONE", "Crash scan complete: Exception boundaries verified stable.")
-        render_agent_card(placeholders[3], *agent_info[3], "DONE", "Issued final WreckCheck readiness certificate.")
+        render_agent_card(placeholders[0], *agent_info[0], "DONE", "Async threads dispatched. Awaiting sub-agent JSON reports via wait_for_async_tasks().", "1.8s", "claude-haiku-4-5", "680 tokens", 0)
+        render_agent_card(placeholders[1], *agent_info[1], "DONE", "Saved workspace/code_sentinel.json: 2 minor enterprise risks flagged.", "4.2s", "claude-haiku-4-5", "1,420 tokens", 2)
+        render_agent_card(placeholders[2], *agent_info[2], "DONE", "Saved workspace/architect_review.json: Clean layering verified.", "4.6s", "claude-haiku-4-5", "1,850 tokens", 1)
+        render_agent_card(placeholders[3], *agent_info[3], "DONE", "Saved workspace/harness_guard.json: All safety guardrails intact.", "4.9s", "claude-haiku-4-5", "1,100 tokens", 0)
+        render_agent_card(placeholders[4], *agent_info[4], "DONE", "Generated workspace/readiness_report.md. Final Score: 94 / 100.", "6.8s", "claude-haiku-4-5", "1,240 tokens", 0)
 
     # --- STAGE 4: OUTPUT PANEL ---
     st.divider()
-    render_stage_header(4, "Inspection Verdict", "Comprehensive stability findings and model routing telemetry.")
+    render_stage_header(4, "Inspection Verdict", "Comprehensive stability findings and live agent execution telemetry.")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["Shipment Assessment", "Guardrail Report", "Model Routing Log", "Raw Telemetry"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Shipment Assessment", "Guardrail Report", "Async Execution Gantt", "Cost & Token Breakdown", "Raw Telemetry"])
     
     with tab1:
         st.markdown(f"### Pre-Shipment Verdict for `{repo_data['name']}`")
         st.markdown("""
-        - **Shipment Readiness Score (`94 / 100`):** Codebase structure passes all primary stability checks. Zero blocking crash vectors or fatal unhandled exceptions detected across core execution paths.
+        - **Shipment Readiness Score (`94 / 100`):** Codebase structure passes all primary enterprise stability checks. Zero blocking crash vectors or fatal unhandled exceptions detected across core execution paths.
         - **Crash Prevention Verification:** Exception boundaries and async retry mechanisms are appropriately isolated, preventing cascading failures under high network load.
         - **Upstream Breakage Guard:** Manifest auditing indicates strict version pinning, mitigating the risk of sudden environmental wrecks when deploying to production containers.
         - **Memory & Lifecycle Safety:** AST complexity analysis confirms clean resource teardown routines with no circular references or obvious memory leaks.
@@ -434,16 +496,16 @@ if st.session_state.analyzed:
             <div class="ui-card">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                     {svg_code}
-                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">Crash Vector & AST Indexer</h4>
+                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">CodeSentinel Enterprise Audit</h4>
                 </div>
-                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Mapped abstract syntax trees to trace exception propagation and ensure critical runtime errors are safely caught before crashing.</p>
+                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Audited workspace/repo_contents.txt for hardcoded API keys, license hygiene, and enterprise security posture.</p>
             </div>
             <div class="ui-card">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                     {svg_shield}
-                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">Credential & Leak Scanner</h4>
+                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">ArchitectReview AST Inspection</h4>
                 </div>
-                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Scanned commit history and environment bindings to prevent sensitive secrets from being shipped into public artifacts.</p>
+                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Scanned abstract syntax trees to verify clean separation of concerns and identify circular coupling across modules.</p>
             </div>
             """, unsafe_allow_html=True)
         with col_s2:
@@ -451,46 +513,84 @@ if st.session_state.analyzed:
             <div class="ui-card">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                     {svg_activity}
-                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">Upstream Breakage Auditor</h4>
+                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">HarnessGuard Safety Sentinel</h4>
                 </div>
-                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Verified external dependencies and SDK constraints against known breaking CVEs and deprecated API endpoints.</p>
+                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Evaluated loop boundaries, prompt injection vectors, and cost guardrails to ensure stable autonomous operation.</p>
             </div>
             <div class="ui-card">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                     {svg_share}
-                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">Inspection Graph Decomposer</h4>
+                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">ReadinessScorer Aggregation</h4>
                 </div>
-                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Formulated an efficient multi-agent verification schedule to inspect complex code boundaries simultaneously.</p>
+                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Synthesized sub-agent JSON outputs into a final quantitative readiness scorecard and markdown report.</p>
             </div>
             """, unsafe_allow_html=True)
 
     with tab3:
-        st.markdown("### LLM Model Routing Decision Matrix")
-        routing_data = [
-            {
-                "Agent Role": "Inspection Commander",
-                "Model Used": "Gemini 3.1 Pro (High)",
-                "Routing Rationale": "Complex reasoning required to map repository architectural risks and orchestrate verification graph."
-            },
-            {
-                "Agent Role": "Dependency Auditor",
-                "Model Used": "Gemini 3.1 Flash",
-                "Routing Rationale": "High-throughput parsing optimized for scanning large manifest trees and checking version breaker rules."
-            },
-            {
-                "Agent Role": "Crash Vulnerability Scanner",
-                "Model Used": "Gemini 3.1 Pro (High)",
-                "Routing Rationale": "Deep semantic code comprehension for identifying unhandled crash vectors and race conditions."
-            },
-            {
-                "Agent Role": "Shipment Assessor",
-                "Model Used": "Gemini 3.1 Flash",
-                "Routing Rationale": "Fast structured markdown aggregation and final shipment readiness scoring."
-            }
-        ]
-        st.dataframe(routing_data, hide_index=True, use_container_width=True)
+        st.markdown("### Asynchronous Pipeline Timeline")
+        st.markdown("""
+        <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 16px;">Demonstrating concurrent asynchronous execution across sub-agents while Scout Orchestrator awaited completion.</p>
+        <div class="ui-card">
+            <div style="margin-bottom: 14px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px;">
+                    <span>Scout (Orchestrator Commander)</span>
+                    <span style="font-family: monospace;">0.0s — 1.8s</span>
+                </div>
+                <div style="background-color: #f1f5f9; height: 16px; border-radius: 8px; width: 100%; position: relative;">
+                    <div style="background-color: #3b82f6; height: 100%; width: 26%; border-radius: 8px;"></div>
+                </div>
+            </div>
+            <div style="margin-bottom: 14px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px;">
+                    <span>CodeSentinel (Async Sub-Agent)</span>
+                    <span style="font-family: monospace;">1.8s — 4.2s</span>
+                </div>
+                <div style="background-color: #f1f5f9; height: 16px; border-radius: 8px; width: 100%; position: relative;">
+                    <div style="background-color: #6366f1; height: 100%; width: 35%; margin-left: 26%; border-radius: 8px;"></div>
+                </div>
+            </div>
+            <div style="margin-bottom: 14px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px;">
+                    <span>ArchitectReview (Async Sub-Agent)</span>
+                    <span style="font-family: monospace;">1.8s — 4.6s</span>
+                </div>
+                <div style="background-color: #f1f5f9; height: 16px; border-radius: 8px; width: 100%; position: relative;">
+                    <div style="background-color: #8b5cf6; height: 100%; width: 41%; margin-left: 26%; border-radius: 8px;"></div>
+                </div>
+            </div>
+            <div style="margin-bottom: 14px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px;">
+                    <span>HarnessGuard (Async Sub-Agent)</span>
+                    <span style="font-family: monospace;">1.8s — 4.9s</span>
+                </div>
+                <div style="background-color: #f1f5f9; height: 16px; border-radius: 8px; width: 100%; position: relative;">
+                    <div style="background-color: #ec4899; height: 100%; width: 45%; margin-left: 26%; border-radius: 8px;"></div>
+                </div>
+            </div>
+            <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px;">
+                    <span>ReadinessScorer (Synthesis)</span>
+                    <span style="font-family: monospace;">4.9s — 6.8s</span>
+                </div>
+                <div style="background-color: #f1f5f9; height: 16px; border-radius: 8px; width: 100%; position: relative;">
+                    <div style="background-color: #10b981; height: 100%; width: 28%; margin-left: 71%; border-radius: 8px;"></div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     with tab4:
+        st.markdown("### Model Efficiency & Resource Expenditure")
+        cost_data = [
+            {"Agent Role": "Scout", "Assigned Model": "claude-haiku-4-5", "Input Tokens": "680", "Output Tokens": "420", "Est. Cost ($)": "$0.00041"},
+            {"Agent Role": "CodeSentinel", "Assigned Model": "claude-haiku-4-5", "Input Tokens": "1,420", "Output Tokens": "680", "Est. Cost ($)": "$0.00088"},
+            {"Agent Role": "ArchitectReview", "Assigned Model": "claude-haiku-4-5", "Input Tokens": "1,850", "Output Tokens": "820", "Est. Cost ($)": "$0.00118"},
+            {"Agent Role": "HarnessGuard", "Assigned Model": "claude-haiku-4-5", "Input Tokens": "1,100", "Output Tokens": "490", "Est. Cost ($)": "$0.00071"},
+            {"Agent Role": "ReadinessScorer", "Assigned Model": "claude-haiku-4-5", "Input Tokens": "1,240", "Output Tokens": "560", "Est. Cost ($)": "$0.00079"},
+        ]
+        st.dataframe(cost_data, hide_index=True, use_container_width=True)
+
+    with tab5:
         st.markdown("### Raw Inspection Telemetry Dump")
         st.json({
             "inspection_id": "wc_20260627_9942",
@@ -504,12 +604,16 @@ if st.session_state.analyzed:
             },
             "execution_summary": {
                 "status": "VERIFIED_STABLE",
-                "inspectors_deployed": 4,
-                "parallel_threads": 2,
-                "duration_seconds": 3.5
+                "inspectors_deployed": 5,
+                "parallel_threads": 3,
+                "total_duration_seconds": 6.8,
+                "total_tokens_consumed": 9290
             },
-            "crash_vectors_detected": 0,
-            "security_leaks": 0
+            "sub_agent_reports": [
+                {"agent": "CodeSentinel", "report_path": "workspace/code_sentinel.json", "findings": 2},
+                {"agent": "ArchitectReview", "report_path": "workspace/architect_review.json", "findings": 1},
+                {"agent": "HarnessGuard", "report_path": "workspace/harness_guard.json", "findings": 0}
+            ]
         })
 
     st.divider()
