@@ -3,4 +3,8 @@ venv/
 .env
 
 workspace/repo_contents.txt
+workspace/architect_review.json
+workspace/code_sentinel.json
+workspace/harness_guard.json
+workspace/readiness_report.md
 run_output.log

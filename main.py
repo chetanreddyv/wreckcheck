@@ -56,6 +56,12 @@ def run(repo_url: str, description: str) -> str:
     result = scout.run(
         f"Assess enterprise readiness for: {repo_url}\nProduct description: {description}"
     )
+    # Save the final report as markdown
+    os.makedirs("./workspace", exist_ok=True)
+    report_path = "./workspace/readiness_report.md"
+    with open(report_path, "w") as f:
+        f.write(result)
+    print(f"\n📄 Report saved to: {report_path}")
     return result
 
 if __name__ == "__main__":
