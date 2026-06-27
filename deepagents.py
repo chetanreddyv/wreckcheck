@@ -36,11 +36,22 @@ class DeepAgent:
             if isinstance(sa, dict):
                 pass
             else:
-                # Create a wrapper tool for Langchain
-                sa_tool = Tool(
+                from langchain_core.tools import StructuredTool
+                from pydantic import BaseModel, Field
+
+                class DelegateInput(BaseModel):
+                    input_text: str = Field(description="The detailed instruction or data to process.")
+
+                def make_delegate_func(agent):
+                    def delegate_func(input_text: str) -> str:
+                        return agent.run(input_text)
+                    return delegate_func
+                    
+                sa_tool = StructuredTool.from_function(
                     name=f"delegate_to_{sa.name.replace('-', '_')}",
-                    func=lambda input_text, agent=sa: agent.run(input_text),
-                    description=f"Delegate tasks to {sa.name}. Input should be a detailed instruction or the data to process."
+                    func=make_delegate_func(sa),
+                    description=f"Delegate tasks to {sa.name}. Input should be a detailed instruction or the data to process.",
+                    args_schema=DelegateInput
                 )
                 self.resolved_tools.append(sa_tool)
                 

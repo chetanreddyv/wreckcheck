@@ -22,7 +22,7 @@ YOUR ONLY JOB:
 4. Delegate to ArchitectReview (use delegate_to_ArchitectReview tool): "Review ./workspace/repo_contents.txt for architecture quality and return the structured JSON report."
 5. Delegate to HarnessGuard (use delegate_to_harness_guard tool): "Audit the codebase for agent safety, prompt injection, cost, observability, and loop controls, and return the structured JSON report."
 6. Wait for CodeSentinel, ArchitectReview, and HarnessGuard to return their JSON reports.
-7. Delegate to ReadinessScorer (use delegate_to_ReadinessScorer tool): "Analyze the following JSON reports from CodeSentinel, ArchitectReview, and HarnessGuard to produce a final enterprise readiness report." (Pass the returned JSON objects as input).
+7. Delegate to ReadinessScorer (use delegate_to_ReadinessScorer tool). You MUST provide the `input_text` parameter containing the string: "Analyze the following JSON reports..." followed by all three JSON reports concatenated into a single string.
 8. Return ReadinessScorer's final report as your final output.
 
 RULES:
