@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WreckCheck — Pre-Shipment Code Inspection</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --surface: #111827;
+            --surface-border: #1f2937;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.5;
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--surface-border);
+        }
+
+        .logo-icon {
+            background: linear-gradient(135deg, var(--primary), #1d4ed8);
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .stage-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--primary);
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .section-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .section-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .card {
+            background-color: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 1rem;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        input[type="text"] {
+            background-color: var(--bg-color);
+            border: 1px solid var(--surface-border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: border-color 0.15s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.15s ease, transform 0.1s ease;
+            font-size: 0.95rem;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+        }
+
+        button:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .validation-msg {
+            margin-top: 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 1rem;
+        }
+
+        .metric-box {
+            background-color: var(--bg-color);
+            border: 1px solid var(--surface-border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .metric-value {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-top: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1rem;
+        }
+
+        .agent-card {
+            background-color: var(--bg-color);
+            border: 1px solid var(--surface-border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .agent-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .agent-name {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .badge-idle { background: #374151; color: #d1d5db; }
+        .badge-running { background: rgba(59, 130, 246, 0.2); color: var(--primary); border: 1px solid var(--primary); }
+        .badge-done { background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid var(--success); }
+        .badge-error { background: rgba(239, 68, 68, 0.2); color: var(--error); border: 1px solid var(--error); }
+
+        .agent-role {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .console-feed {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            background: #05070d;
+            border-radius: 6px;
+            padding: 0.75rem;
+            color: #a78bfa;
+            border: 1px solid #1e293b;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--surface-border);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab-btn {
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .tab-btn.active {
+            background: var(--surface-border);
+            color: var(--text-main);
+        }
+
+        .tab-content {
+            display: none;
+            background: var(--bg-color);
+            border: 1px solid var(--surface-border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            overflow-x: auto;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        pre {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            white-space: pre-wrap;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+        </div>
+        <div>
+            <h1>WreckCheck</h1>
+            <div class="subtitle">Pre-shipment code inspection & autonomous architecture verification</div>
+        </div>
+    </header>
+
+    <!-- Stage 1 -->
+    <div class="section-header">
+        <div class="stage-title">Stage 01</div>
+        <h2>Target Repository</h2>
+    </div>
+    <div class="card">
+        <div class="input-grid">
+            <div class="form-group">
+                <label for="repo-url">Repository URL</label>
+                <input type="text" id="repo-url" placeholder="e.g., streamlit/streamlit or https://github.com/...">
+            </div>
+            <div class="form-group">
+                <label for="repo-desc">Product Description</label>
+                <input type="text" id="repo-desc" placeholder="e.g., Enterprise multi-agent AI coding assistant">
+            </div>
+            <button id="run-btn" disabled>Run WreckCheck</button>
+        </div>
+        <div id="validation-msg" class="validation-msg" style="color: var(--text-muted);">Enter a repository link above to validate format.</div>
+    </div>
+
+    <!-- Stage 2 -->
+    <div id="stage-metrics" class="hidden">
+        <div class="section-header">
+            <div class="stage-title">Stage 02</div>
+            <h2>Inspection Telemetry</h2>
+        </div>
+        <div class="card">
+            <div class="metrics-grid" id="metrics-container">
+                <!-- Metrics inserted dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Stage 3 -->
+    <div id="stage-pipeline" class="hidden">
+        <div class="section-header">
+            <div class="stage-title">Stage 03</div>
+            <h2>Live Verification Pipeline</h2>
+        </div>
+        <div class="card">
+            <div class="agents-grid">
+                <div class="agent-card" id="agent-scout">
+                    <div class="agent-header">
+                        <span class="agent-name">Scout</span>
+                        <span class="badge badge-idle">IDLE</span>
+                    </div>
+                    <div class="agent-role">Orchestrator Commander & Task Graph Dispatch</div>
+                    <div class="console-feed">&gt; Waiting for initiation...</div>
+                </div>
+                <div class="agent-card" id="agent-codesentinel">
+                    <div class="agent-header">
+                        <span class="agent-name">CodeSentinel</span>
+                        <span class="badge badge-idle">IDLE</span>
+                    </div>
+                    <div class="agent-role">Enterprise Readiness & Security Leak Auditor</div>
+                    <div class="console-feed">&gt; Standby...</div>
+                </div>
+                <div class="agent-card" id="agent-architectreview">
+                    <div class="agent-header">
+                        <span class="agent-name">ArchitectReview</span>
+                        <span class="badge badge-idle">IDLE</span>
+                    </div>
+                    <div class="agent-role">Architectural Quality & AST Call Graph Auditor</div>
+                    <div class="console-feed">&gt; Standby...</div>
+                </div>
+                <div class="agent-card" id="agent-harnessguard">
+                    <div class="agent-header">
+                        <span class="agent-name">HarnessGuard</span>
+                        <span class="badge badge-idle">IDLE</span>
+                    </div>
+                    <div class="agent-role">Agent Safety, Cost & Loop Guardrail Sentinel</div>
+                    <div class="console-feed">&gt; Standby...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stage 4 -->
+    <div id="stage-results" class="hidden">
+        <div class="section-header">
+            <div class="stage-title">Stage 04</div>
+            <h2>Inspection Verdict</h2>
+        </div>
+        <div class="card">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('tab-report', event)">Readiness Report</button>
+                <button class="tab-btn" onclick="switchTab('tab-json', event)">Raw Audits (JSON)</button>
+                <button class="tab-btn" onclick="switchTab('tab-error', event)">Error Logs</button>
+            </div>
+            <div id="tab-report" class="tab-content active"></div>
+            <div id="tab-json" class="tab-content"><pre id="json-content"></pre></div>
+            <div id="tab-error" class="tab-content"><pre id="error-content"></pre></div>
+        </div>
+        <button onclick="resetPipeline()" style="background-color: var(--surface-border); margin-top: 1rem;">Run Another Inspection</button>
+    </div>
+
+    <script>
+        let validatedRepo = null;
+        let pollInterval = null;
+
+        const urlInput = document.getElementById('repo-url');
+        const descInput = document.getElementById('repo-desc');
+        const runBtn = document.getElementById('run-btn');
+        const valMsg = document.getElementById('validation-msg');
+
+        urlInput.addEventListener('input', async () => {
+            const url = urlInput.value.trim();
+            if (!url) {
+                valMsg.textContent = "Enter a repository link above to validate format.";
+                valMsg.style.color = "var(--text-muted)";
+                runBtn.disabled = true;
+                return;
+            }
+            try {
+                const res = await fetch('/api/validate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                const data = await res.json();
+                if (data.valid) {
+                    validatedRepo = data;
+                    valMsg.innerHTML = `Valid Format: Target set to <b>${data.owner}/${data.repo}</b>`;
+                    valMsg.style.color = "var(--success)";
+                    runBtn.disabled = false;
+                } else {
+                    valMsg.textContent = "Invalid format. Use owner/repo or GitHub URL.";
+                    valMsg.style.color = "var(--error)";
+                    runBtn.disabled = true;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        });
+
+        runBtn.addEventListener('click', async () => {
+            if (!validatedRepo) return;
+            runBtn.disabled = true;
+            urlInput.disabled = true;
+            descInput.disabled = true;
+
+            document.getElementById('stage-metrics').classList.remove('hidden');
+            document.getElementById('stage-pipeline').classList.remove('hidden');
+            document.getElementById('stage-results').classList.add('hidden');
+
+            setAgentStatus('scout', 'running', 'Fetching repository structure & spawning sub-agents...');
+            setAgentStatus('codesentinel', 'running', 'Auditing enterprise readiness & secrets...');
+            setAgentStatus('architectreview', 'running', 'Analyzing codebase architecture...');
+            setAgentStatus('harnessguard', 'running', 'Inspecting agent loop guardrails...');
+
+            // Fetch metrics
+            fetch(`/api/repo-info/${validatedRepo.owner}/${validatedRepo.repo}`)
+                .then(r => r.json())
+                .then(data => {
+                    const cont = document.getElementById('metrics-container');
+                    cont.innerHTML = Object.entries(data).map(([k, v]) => `
+                        <div class="metric-box">
+                            <div class="metric-label">${k}</div>
+                            <div class="metric-value">${v}</div>
+                        </div>
+                    `).join('');
+                });
+
+            // Start Analysis
+            await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    owner: validatedRepo.owner,
+                    repo: validatedRepo.repo,
+                    description: descInput.value
+                })
+            });
+
+            // Start polling
+            pollInterval = setInterval(checkStatus, 1500);
+        });
+
+        async function checkStatus() {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+
+            if (data.status === 'done' || data.status === 'error') {
+                clearInterval(pollInterval);
+                const isErr = data.status === 'error';
+
+                setAgentStatus('scout', isErr ? 'error' : 'done', isErr ? 'Execution failed.' : `Completed in ${data.elapsed}`);
+                setAgentStatus('codesentinel', isErr ? 'error' : 'done', isErr ? 'Failed.' : 'Audit complete.');
+                setAgentStatus('architectreview', isErr ? 'error' : 'done', isErr ? 'Failed.' : 'Audit complete.');
+                setAgentStatus('harnessguard', isErr ? 'error' : 'done', isErr ? 'Failed.' : 'Audit complete.');
+
+                document.getElementById('stage-results').classList.remove('hidden');
+                document.getElementById('tab-report').innerHTML = marked.parse(data.report || "No report generated.");
+                document.getElementById('json-content').textContent = JSON.stringify(data.reports, null, 2);
+                document.getElementById('error-content').textContent = data.error || "No errors encountered.";
+
+                if (isErr) switchTab('tab-error', { target: document.querySelectorAll('.tab-btn')[2] });
+            }
+        }
+
+        function setAgentStatus(id, status, log) {
+            const card = document.getElementById(`agent-${id}`);
+            const badge = card.querySelector('.badge');
+            const feed = card.querySelector('.console-feed');
+
+            badge.className = `badge badge-${status}`;
+            badge.textContent = status.toUpperCase();
+            feed.textContent = `> ${log}`;
+        }
+
+        function switchTab(id, e) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            if (e && e.target) e.target.classList.add('active');
+            document.getElementById(id).classList.add('active');
+        }
+
+        async function resetPipeline() {
+            await fetch('/api/reset', { method: 'POST' });
+            location.reload();
+        }
+    </script>
+</body>
+</html>
