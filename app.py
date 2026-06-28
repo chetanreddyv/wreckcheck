@@ -1,7 +1,18 @@
+import os
 import re
+import json
 import time
 import requests
+import traceback
+import dotenv
 import streamlit as st
+
+# ---- ENV BOOTSTRAP ----
+# main.py does dotenv.load_dotenv() at module level. Streamlit may not pick up .env
+# unless we load it ourselves BEFORE importing main.
+dotenv.load_dotenv()
+if "anthropic_api_key" in os.environ and "ANTHROPIC_API_KEY" not in os.environ:
+    os.environ["ANTHROPIC_API_KEY"] = os.environ["anthropic_api_key"]
 
 # Set page configuration
 st.set_page_config(
@@ -116,6 +127,17 @@ div[data-baseweb="input"] > div {
 div[data-baseweb="input"] > div:focus-within {
     border-color: #2563eb !important;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08) !important;
+}
+/* Force input text color to black for visibility */
+div[data-baseweb="input"] input {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a !important;
+    font-size: 0.92rem !important;
+}
+div[data-baseweb="input"] input::placeholder {
+    color: #94a3b8 !important;
+    -webkit-text-fill-color: #94a3b8 !important;
 }
 
 /* Industry Standard Flat Solid Buttons */
@@ -235,20 +257,32 @@ def fetch_repo_data(owner: str, repo: str):
     
     return {
         "name": f"{owner}/{repo}",
-        "language": "Python",
-        "stars": "1,420",
-        "size_kb": "18,240 KB",
+        "language": "Unknown",
+        "stars": "N/A",
+        "size_kb": "N/A",
         "branch": "main",
-        "last_push": "2026-06-25",
-        "visibility": "Public",
-        "raw": {
-            "note": "Simulated metadata due to API rate limit/error",
-            "owner": owner,
-            "repo": repo,
-            "stargazers_count": 1420,
-            "language": "Python"
-        }
+        "last_push": "N/A",
+        "visibility": "Unknown",
+        "raw": {"error": "API call failed or rate-limited"}
     }
+
+# Helper to safely load a workspace JSON file
+def _load_workspace_json(filename: str):
+    fpath = os.path.join("./workspace", filename)
+    if not os.path.exists(fpath):
+        return None
+    try:
+        with open(fpath, "r") as f:
+            content = f.read().strip()
+        # The agent may output raw text that isn't valid JSON;
+        # deepagents.py writes str(res) which may not be valid JSON.
+        # Try json.loads first, then fall back to displaying raw text.
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            return {"_raw_text": content}
+    except Exception:
+        return None
 
 # Helper function to render an agent performance dashboard card
 def render_agent_card(placeholder, name: str, role: str, status: str, log_msg: str, timer: str = "0.0s", model: str = "claude-haiku-4-5", tokens: str = "0 tokens", findings: int = 0):
@@ -311,11 +345,12 @@ st.markdown("""
 st.divider()
 
 # --- STAGE 1: INPUT PANEL ---
-render_stage_header(1, "Target Repository", "Enter the target repository URL to scan for structural vulnerabilities before shipping.")
+render_stage_header(1, "Target Repository", "Enter the target repository URL and product description to scan for enterprise readiness.")
 
-col_input, col_btn = st.columns([4, 1])
+col_input1, col_input2, col_btn = st.columns([2.5, 2.5, 1])
 
-with col_input:
+with col_input1:
+    st.markdown('<div style="font-size: 0.82rem; font-weight: 500; color: #475569; margin-bottom: 4px;">Repository URL</div>', unsafe_allow_html=True)
     repo_input = st.text_input(
         "Repository URL", 
         key="repo_input_field", 
@@ -323,15 +358,26 @@ with col_input:
         label_visibility="collapsed"
     )
 
+with col_input2:
+    st.markdown('<div style="font-size: 0.82rem; font-weight: 500; color: #475569; margin-bottom: 4px;">Product Description</div>', unsafe_allow_html=True)
+    desc_input = st.text_input(
+        "Product Description",
+        key="desc_input_field",
+        placeholder="e.g., Enterprise multi-agent AI coding assistant",
+        label_visibility="collapsed"
+    )
+
 parsed_url = parse_github_url(repo_input)
 
 # Live badge validation as user types
-if not repo_input:
-    st.markdown('<div style="color: #64748b; font-size: 0.85rem; font-weight: 400; margin-top: 6px;">Enter a repository link above to validate format.</div>', unsafe_allow_html=True)
-elif parsed_url:
-    st.markdown(f'<div style="color: #16a34a; font-size: 0.85rem; font-weight: 500; margin-top: 6px;">Valid Format: Normalized to repository target <code>{parsed_url[0]}/{parsed_url[1]}</code></div>', unsafe_allow_html=True)
-else:
-    st.markdown('<div style="color: #dc2626; font-size: 0.85rem; font-weight: 500; margin-top: 6px;">Invalid Format: Please enter a valid HTTP URL, SSH path, or owner/repo shorthand.</div>', unsafe_allow_html=True)
+col_msg1, col_msg2 = st.columns([5, 1])
+with col_msg1:
+    if not repo_input:
+        st.markdown('<div style="color: #64748b; font-size: 0.85rem; font-weight: 400; margin-top: 2px;">Enter a repository link above to validate format.</div>', unsafe_allow_html=True)
+    elif parsed_url:
+        st.markdown(f'<div style="color: #16a34a; font-size: 0.85rem; font-weight: 500; margin-top: 2px;">Valid Format: Normalized to target <code>{parsed_url[0]}/{parsed_url[1]}</code></div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div style="color: #dc2626; font-size: 0.85rem; font-weight: 500; margin-top: 2px;">Invalid Format: Please enter a valid HTTP URL, SSH path, or owner/repo shorthand.</div>', unsafe_allow_html=True)
 
 with col_btn:
     analyze_clicked = st.button(
@@ -344,8 +390,13 @@ with col_btn:
 if analyze_clicked and parsed_url:
     st.session_state.analyzed = True
     st.session_state.owner, st.session_state.repo = parsed_url
+    st.session_state.target_url = f"https://github.com/{parsed_url[0]}/{parsed_url[1]}"
+    st.session_state.description = desc_input.strip() if desc_input and desc_input.strip() else "Enterprise automated software repository"
     st.session_state.run_completed = False
     st.session_state.repo_data = None
+    st.session_state.final_report = None
+    st.session_state.json_reports = {}
+    st.session_state.run_error = None
 
 # --- PROGRESSION PIPELINE (STAGES 2, 3, 4) ---
 if st.session_state.analyzed:
@@ -381,7 +432,7 @@ if st.session_state.analyzed:
 
     # --- STAGE 3: LIVE ORCHESTRATION VIEW ---
     st.divider()
-    render_stage_header(3, "Live Verification Pipeline", "Real-time performance telemetry across collaborative autonomous agents.")
+    render_stage_header(3, "Live Verification Pipeline", "Real-time execution telemetry from main.py DeepAgents pipeline.")
     
     agent_info = [
         ("Scout", "Orchestrator Commander & Task Graph Dispatch"),
@@ -404,216 +455,267 @@ if st.session_state.analyzed:
     ]
     
     if not st.session_state.run_completed:
-        # Initial WAITING state
         for i in range(5):
-            render_agent_card(placeholders[i], *agent_info[i], "WAITING", "Standby for async dispatch...", "0.0s", "claude-haiku-4-5", "0 tokens", 0)
+            render_agent_card(placeholders[i], *agent_info[i], "WAITING", "Standby for live execution...", "0.0s", "claude-haiku-4-5", "0 tokens", 0)
             
-        with st.status("WreckCheck Inspection Active — Verifying Codebase Readiness...", expanded=True) as status_box:
-            st.write("Initialization: Establishing agent communication bus...")
-            time.sleep(0.4)
+        with st.status("WreckCheck Inspection Active — Executing Live DeepAgents Pipeline...", expanded=True) as status_box:
+            st.write("Initialization: Loading .env, hooking into main.py Scout Orchestrator...")
             
-            # Step 1: Scout Orchestrator
-            status_box.update(label="Scout Orchestrator fetching repository files and building DAG...", state="running")
-            render_agent_card(placeholders[0], *agent_info[0], "RUNNING", "Invoking fetch_repo_files() tool and cloning repo structure...", "0.8s", "claude-haiku-4-5", "320 tokens", 0)
-            time.sleep(0.6)
-            render_agent_card(placeholders[0], *agent_info[0], "RUNNING", "Spawning parallel async sub-agents: CodeSentinel, ArchitectReview, HarnessGuard...", "1.4s", "claude-haiku-4-5", "580 tokens", 0)
-            time.sleep(0.6)
-            render_agent_card(placeholders[0], *agent_info[0], "DONE", "Async threads dispatched. Awaiting sub-agent JSON reports via wait_for_async_tasks().", "1.8s", "claude-haiku-4-5", "680 tokens", 0)
-            st.write("Orchestration DAG dispatched. Parallel inspection active.")
+            # Show RUNNING state for all agents before the blocking call
+            render_agent_card(placeholders[0], *agent_info[0], "RUNNING", "Invoking fetch_repo_files() and spawning sub-agent DAG...", "...", "claude-haiku-4-5", "Active", 0)
+            render_agent_card(placeholders[1], *agent_info[1], "RUNNING", "Dispatched: Auditing enterprise readiness & secrets...", "...", "claude-haiku-4-5", "Active", 0)
+            render_agent_card(placeholders[2], *agent_info[2], "RUNNING", "Dispatched: Evaluating architecture & structural layering...", "...", "claude-haiku-4-5", "Active", 0)
+            render_agent_card(placeholders[3], *agent_info[3], "RUNNING", "Dispatched: Verifying loop controls & safety guardrails...", "...", "claude-haiku-4-5", "Active", 0)
+            render_agent_card(placeholders[4], *agent_info[4], "WAITING", "Waiting for upstream sub-agents to complete...", "...", "claude-haiku-4-5", "Pending", 0)
             
-            # Step 2: Parallel Auditing (CodeSentinel, ArchitectReview, HarnessGuard)
-            status_box.update(label="Parallel Execution: CodeSentinel, ArchitectReview & HarnessGuard scanning...", state="running")
-            render_agent_card(placeholders[1], *agent_info[1], "RUNNING", "Auditing ./workspace/repo_contents.txt for hardcoded credentials...", "2.4s", "claude-haiku-4-5", "920 tokens", 1)
-            render_agent_card(placeholders[2], *agent_info[2], "RUNNING", "Evaluating package structure and circular dependency boundaries...", "2.6s", "claude-haiku-4-5", "1,100 tokens", 0)
-            render_agent_card(placeholders[3], *agent_info[3], "RUNNING", "Scanning for prompt injection vectors and unchecked recursion loops...", "2.5s", "claude-haiku-4-5", "640 tokens", 0)
-            time.sleep(0.8)
+            start_t = time.time()
+            pipeline_error = None
+            final_output = None
             
-            render_agent_card(placeholders[1], *agent_info[1], "RUNNING", "Compiling enterprise readiness findings into code_sentinel.json...", "3.5s", "claude-haiku-4-5", "1,340 tokens", 2)
-            render_agent_card(placeholders[2], *agent_info[2], "RUNNING", "Detecting tight coupling & writing architect_review.json...", "3.8s", "claude-haiku-4-5", "1,650 tokens", 1)
-            render_agent_card(placeholders[3], *agent_info[3], "RUNNING", "Verifying observability hooks & saving harness_guard.json...", "3.6s", "claude-haiku-4-5", "980 tokens", 0)
-            time.sleep(0.8)
+            try:
+                # Pre-validate: check API key is available
+                api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("anthropic_api_key")
+                if not api_key:
+                    raise EnvironmentError(
+                        "ANTHROPIC_API_KEY not found in environment. "
+                        "Please set it in your .env file as: ANTHROPIC_API_KEY=sk-ant-..."
+                    )
+                
+                # Pre-validate: ensure required modules can be imported
+                try:
+                    import langchain_anthropic
+                except ImportError as ie:
+                    raise ImportError(
+                        f"Missing dependency: {ie}. Run: pip install langchain-anthropic"
+                    )
+                
+                # Import and run the actual backend pipeline from main.py
+                from main import run as run_live_pipeline
+                st.write("Pipeline modules loaded. Executing Scout orchestrator...")
+                final_output = run_live_pipeline(
+                    st.session_state.target_url,
+                    st.session_state.description
+                )
+            except Exception as e:
+                pipeline_error = f"{type(e).__name__}: {str(e)}\n\n```\n{traceback.format_exc()}\n```"
+                
+            elapsed_sec = round(time.time() - start_t, 1)
+            st.session_state.elapsed_time = f"{elapsed_sec}s"
             
-            render_agent_card(placeholders[1], *agent_info[1], "DONE", "Saved workspace/code_sentinel.json: 2 minor enterprise risks flagged.", "4.2s", "claude-haiku-4-5", "1,420 tokens", 2)
-            render_agent_card(placeholders[2], *agent_info[2], "DONE", "Saved workspace/architect_review.json: Clean layering verified.", "4.6s", "claude-haiku-4-5", "1,850 tokens", 1)
-            render_agent_card(placeholders[3], *agent_info[3], "DONE", "Saved workspace/harness_guard.json: All safety guardrails intact.", "4.9s", "claude-haiku-4-5", "1,100 tokens", 0)
-            st.write("All three parallel async sub-agents returned structured JSON reports.")
+            # ---- Load workspace outputs regardless of success/failure ----
+            # The sub-agents write to workspace/ even if Scout itself errors later
+            reports = {}
+            for key, fname in [("CodeSentinel", "code_sentinel.json"), ("ArchitectReview", "architect_review.json"), ("HarnessGuard", "harness_guard.json")]:
+                loaded = _load_workspace_json(fname)
+                if loaded is not None:
+                    reports[key] = loaded
+            st.session_state.json_reports = reports
             
-            # Step 3: Synthesis (ReadinessScorer)
-            status_box.update(label="ReadinessScorer synthesizing final enterprise readiness verdict...", state="running")
-            render_agent_card(placeholders[4], *agent_info[4], "RUNNING", "Reading code_sentinel.json, architect_review.json & harness_guard.json...", "5.4s", "claude-haiku-4-5", "720 tokens", 0)
-            time.sleep(0.7)
-            render_agent_card(placeholders[4], *agent_info[4], "RUNNING", "Applying weighted enterprise readiness scoring formula...", "6.1s", "claude-haiku-4-5", "1,050 tokens", 0)
-            time.sleep(0.6)
-            render_agent_card(placeholders[4], *agent_info[4], "DONE", "Generated workspace/readiness_report.md. Final Score: 94 / 100.", "6.8s", "claude-haiku-4-5", "1,240 tokens", 0)
-            st.write("Final readiness evaluation completed.")
+            # Load the markdown report from workspace (main.py writes it)
+            md_path = "./workspace/readiness_report.md"
+            if os.path.exists(md_path):
+                try:
+                    with open(md_path, "r") as f:
+                        st.session_state.final_report = f.read()
+                except Exception:
+                    st.session_state.final_report = final_output
+            else:
+                st.session_state.final_report = final_output
+                
+            if pipeline_error:
+                st.session_state.run_error = pipeline_error
             
-            status_box.update(label="WreckCheck Complete — Codebase Verified Safe for Shipment", state="complete", expanded=False)
-            time.sleep(0.4)
+            # ---- Update cards to final state ----
+            et = st.session_state.elapsed_time
+            if pipeline_error:
+                render_agent_card(placeholders[0], *agent_info[0], "ERROR", "Pipeline encountered an error. See output panel for details.", et, "claude-haiku-4-5", "See logs", 0)
+            else:
+                render_agent_card(placeholders[0], *agent_info[0], "DONE", "Orchestration completed. All sub-agent reports collected.", et, "claude-haiku-4-5", "Completed", 0)
             
-        st.session_state.run_completed = True
-        st.rerun()
+            cs_status = "DONE" if "CodeSentinel" in reports else ("ERROR" if pipeline_error else "DONE")
+            ar_status = "DONE" if "ArchitectReview" in reports else ("ERROR" if pipeline_error else "DONE")
+            hg_status = "DONE" if "HarnessGuard" in reports else ("ERROR" if pipeline_error else "DONE")
+            rs_status = "DONE" if st.session_state.final_report else ("ERROR" if pipeline_error else "DONE")
+            
+            render_agent_card(placeholders[1], *agent_info[1], cs_status, "workspace/code_sentinel.json" if "CodeSentinel" in reports else "No output generated.", et, "claude-haiku-4-5", "Completed", 0)
+            render_agent_card(placeholders[2], *agent_info[2], ar_status, "workspace/architect_review.json" if "ArchitectReview" in reports else "No output generated.", et, "claude-haiku-4-5", "Completed", 0)
+            render_agent_card(placeholders[3], *agent_info[3], hg_status, "workspace/harness_guard.json" if "HarnessGuard" in reports else "No output generated.", et, "claude-haiku-4-5", "Completed", 0)
+            render_agent_card(placeholders[4], *agent_info[4], rs_status, "workspace/readiness_report.md" if st.session_state.final_report else "No report generated.", et, "claude-haiku-4-5", "Completed", 0)
+            
+            if pipeline_error:
+                status_box.update(label=f"WreckCheck Completed with Errors ({et})", state="error", expanded=False)
+            else:
+                status_box.update(label=f"WreckCheck Complete ({et})", state="complete", expanded=False)
+            
+            time.sleep(0.3)
+            st.session_state.run_completed = True
+            st.rerun()
     else:
-        # Render static completed banner & cards
-        st.markdown("""
-        <div style="background-color: #ffffff; border: 1px solid #f1f5f9; color: #0f172a; padding: 14px 18px; border-radius: 10px; font-weight: 500; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
-            <span>WreckCheck Inspection Passed — Codebase Verified Safe for Shipment</span>
-        </div>
-        """, unsafe_allow_html=True)
-        render_agent_card(placeholders[0], *agent_info[0], "DONE", "Async threads dispatched. Awaiting sub-agent JSON reports via wait_for_async_tasks().", "1.8s", "claude-haiku-4-5", "680 tokens", 0)
-        render_agent_card(placeholders[1], *agent_info[1], "DONE", "Saved workspace/code_sentinel.json: 2 minor enterprise risks flagged.", "4.2s", "claude-haiku-4-5", "1,420 tokens", 2)
-        render_agent_card(placeholders[2], *agent_info[2], "DONE", "Saved workspace/architect_review.json: Clean layering verified.", "4.6s", "claude-haiku-4-5", "1,850 tokens", 1)
-        render_agent_card(placeholders[3], *agent_info[3], "DONE", "Saved workspace/harness_guard.json: All safety guardrails intact.", "4.9s", "claude-haiku-4-5", "1,100 tokens", 0)
-        render_agent_card(placeholders[4], *agent_info[4], "DONE", "Generated workspace/readiness_report.md. Final Score: 94 / 100.", "6.8s", "claude-haiku-4-5", "1,240 tokens", 0)
+        # ---- STATIC POST-RUN VIEW ----
+        reports = st.session_state.get("json_reports", {})
+        elapsed = st.session_state.get("elapsed_time", "N/A")
+        run_error = st.session_state.get("run_error")
+        
+        if run_error:
+            st.markdown(f"""
+            <div style="background-color: #ffffff; border: 1px solid #fecaca; color: #0f172a; padding: 14px 18px; border-radius: 10px; font-weight: 500; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                <span>WreckCheck encountered an error during execution ({elapsed}). Partial results may be available below.</span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="background-color: #ffffff; border: 1px solid #f1f5f9; color: #0f172a; padding: 14px 18px; border-radius: 10px; font-weight: 500; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+                <span>WreckCheck Live Inspection Passed ({elapsed})</span>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        cs_status = "DONE" if "CodeSentinel" in reports else "ERROR"
+        ar_status = "DONE" if "ArchitectReview" in reports else "ERROR"
+        hg_status = "DONE" if "HarnessGuard" in reports else "ERROR"
+        rs_status = "DONE" if st.session_state.get("final_report") else "ERROR"
+        overall_status = "ERROR" if run_error else "DONE"
+        
+        render_agent_card(placeholders[0], *agent_info[0], overall_status, "Orchestration completed." if not run_error else "Error during orchestration.", elapsed, "claude-haiku-4-5", "Completed", 0)
+        render_agent_card(placeholders[1], *agent_info[1], cs_status, "workspace/code_sentinel.json" if "CodeSentinel" in reports else "No output.", elapsed, "claude-haiku-4-5", "Completed", 0)
+        render_agent_card(placeholders[2], *agent_info[2], ar_status, "workspace/architect_review.json" if "ArchitectReview" in reports else "No output.", elapsed, "claude-haiku-4-5", "Completed", 0)
+        render_agent_card(placeholders[3], *agent_info[3], hg_status, "workspace/harness_guard.json" if "HarnessGuard" in reports else "No output.", elapsed, "claude-haiku-4-5", "Completed", 0)
+        render_agent_card(placeholders[4], *agent_info[4], rs_status, "workspace/readiness_report.md" if st.session_state.get("final_report") else "No report.", elapsed, "claude-haiku-4-5", "Completed", 0)
 
     # --- STAGE 4: OUTPUT PANEL ---
     st.divider()
-    render_stage_header(4, "Inspection Verdict", "Comprehensive stability findings and live agent execution telemetry.")
+    render_stage_header(4, "Inspection Verdict", "Generated markdown report and JSON audit outputs from live DeepAgents pipeline.")
     
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Shipment Assessment", "Guardrail Report", "Async Execution Gantt", "Cost & Token Breakdown", "Raw Telemetry"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Readiness Report (MD)", "Sub-Agent JSON Reports", "Pipeline Timeline", "Raw Telemetry"])
     
     with tab1:
-        st.markdown(f"### Pre-Shipment Verdict for `{repo_data['name']}`")
-        st.markdown("""
-        - **Shipment Readiness Score (`94 / 100`):** Codebase structure passes all primary enterprise stability checks. Zero blocking crash vectors or fatal unhandled exceptions detected across core execution paths.
-        - **Crash Prevention Verification:** Exception boundaries and async retry mechanisms are appropriately isolated, preventing cascading failures under high network load.
-        - **Upstream Breakage Guard:** Manifest auditing indicates strict version pinning, mitigating the risk of sudden environmental wrecks when deploying to production containers.
-        - **Memory & Lifecycle Safety:** AST complexity analysis confirms clean resource teardown routines with no circular references or obvious memory leaks.
-        - **Optimization Recommendation:** Implementing concurrent timeout guards on third-party API fetches will further protect against downstream latency spikes.
-        """)
-        
+        st.markdown(f"### Live Readiness Report for `{repo_data['name']}`")
+        final_md = st.session_state.get("final_report")
+        # Fallback: try reading from disk if session state lost it
+        if not final_md and os.path.exists("./workspace/readiness_report.md"):
+            try:
+                with open("./workspace/readiness_report.md", "r") as f:
+                    final_md = f.read()
+            except Exception:
+                pass
+                
+        if final_md:
+            st.markdown(final_md)
+        else:
+            st.info("No markdown report was generated. Check the error output or re-run the pipeline.")
+            
+        # Show error details if present
+        run_error = st.session_state.get("run_error")
+        if run_error:
+            with st.expander("Pipeline Error Details", expanded=False):
+                st.markdown(run_error)
+            
     with tab2:
-        st.markdown("### Pre-Shipment Guardrails Exercised")
-        col_s1, col_s2 = st.columns(2)
+        st.markdown("### Generated Sub-Agent JSON Audit Reports")
+        reports = st.session_state.get("json_reports", {})
         
-        svg_code = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>'
-        svg_shield = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>'
-        svg_activity = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>'
-        svg_share = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>'
-
-        with col_s1:
-            st.markdown(f"""
-            <div class="ui-card">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                    {svg_code}
-                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">CodeSentinel Enterprise Audit</h4>
-                </div>
-                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Audited workspace/repo_contents.txt for hardcoded API keys, license hygiene, and enterprise security posture.</p>
-            </div>
-            <div class="ui-card">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                    {svg_shield}
-                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">ArchitectReview AST Inspection</h4>
-                </div>
-                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Scanned abstract syntax trees to verify clean separation of concerns and identify circular coupling across modules.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        with col_s2:
-            st.markdown(f"""
-            <div class="ui-card">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                    {svg_activity}
-                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">HarnessGuard Safety Sentinel</h4>
-                </div>
-                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Evaluated loop boundaries, prompt injection vectors, and cost guardrails to ensure stable autonomous operation.</p>
-            </div>
-            <div class="ui-card">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                    {svg_share}
-                    <h4 style="margin: 0; color: #0f172a; font-size: 1rem; font-weight: 600;">ReadinessScorer Aggregation</h4>
-                </div>
-                <p style="color: #64748b; font-size: 0.85rem; margin: 0; line-height: 1.5;">Synthesized sub-agent JSON outputs into a final quantitative readiness scorecard and markdown report.</p>
-            </div>
-            """, unsafe_allow_html=True)
+        if not reports:
+            st.info("No sub-agent JSON reports found in ./workspace/. The pipeline may not have completed.")
+        else:
+            col_r1, col_r2 = st.columns(2)
+            with col_r1:
+                st.markdown("#### CodeSentinel Output")
+                if "CodeSentinel" in reports:
+                    data = reports["CodeSentinel"]
+                    if "_raw_text" in data:
+                        st.code(data["_raw_text"], language="json")
+                    else:
+                        st.json(data)
+                else:
+                    st.write("No report found at workspace/code_sentinel.json")
+                    
+                st.markdown("#### HarnessGuard Output")
+                if "HarnessGuard" in reports:
+                    data = reports["HarnessGuard"]
+                    if "_raw_text" in data:
+                        st.code(data["_raw_text"], language="json")
+                    else:
+                        st.json(data)
+                else:
+                    st.write("No report found at workspace/harness_guard.json")
+                    
+            with col_r2:
+                st.markdown("#### ArchitectReview Output")
+                if "ArchitectReview" in reports:
+                    data = reports["ArchitectReview"]
+                    if "_raw_text" in data:
+                        st.code(data["_raw_text"], language="json")
+                    else:
+                        st.json(data)
+                else:
+                    st.write("No report found at workspace/architect_review.json")
 
     with tab3:
         st.markdown("### Asynchronous Pipeline Timeline")
-        st.markdown("""
-        <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 16px;">Demonstrating concurrent asynchronous execution across sub-agents while Scout Orchestrator awaited completion.</p>
+        elapsed = st.session_state.get("elapsed_time", "N/A")
+        st.markdown(f"""
+        <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 16px;">Total pipeline wall-clock time: <strong>{elapsed}</strong>. CodeSentinel, ArchitectReview, and HarnessGuard execute concurrently via ThreadPoolExecutor.</p>
         <div class="ui-card">
             <div style="margin-bottom: 14px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px;">
-                    <span>Scout (Orchestrator Commander)</span>
-                    <span style="font-family: monospace;">0.0s — 1.8s</span>
+                    <span>Scout (Orchestrator)</span>
+                    <span style="font-family: monospace;">Phase 1: Fetch & Dispatch</span>
                 </div>
                 <div style="background-color: #f1f5f9; height: 16px; border-radius: 8px; width: 100%; position: relative;">
-                    <div style="background-color: #3b82f6; height: 100%; width: 26%; border-radius: 8px;"></div>
+                    <div style="background-color: #3b82f6; height: 100%; width: 20%; border-radius: 8px;"></div>
                 </div>
             </div>
             <div style="margin-bottom: 14px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px;">
-                    <span>CodeSentinel (Async Sub-Agent)</span>
-                    <span style="font-family: monospace;">1.8s — 4.2s</span>
+                    <span>CodeSentinel (Async)</span>
+                    <span style="font-family: monospace;">Parallel Phase</span>
                 </div>
                 <div style="background-color: #f1f5f9; height: 16px; border-radius: 8px; width: 100%; position: relative;">
-                    <div style="background-color: #6366f1; height: 100%; width: 35%; margin-left: 26%; border-radius: 8px;"></div>
+                    <div style="background-color: #6366f1; height: 100%; width: 40%; margin-left: 20%; border-radius: 8px;"></div>
                 </div>
             </div>
             <div style="margin-bottom: 14px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px;">
-                    <span>ArchitectReview (Async Sub-Agent)</span>
-                    <span style="font-family: monospace;">1.8s — 4.6s</span>
+                    <span>ArchitectReview (Async)</span>
+                    <span style="font-family: monospace;">Parallel Phase</span>
                 </div>
                 <div style="background-color: #f1f5f9; height: 16px; border-radius: 8px; width: 100%; position: relative;">
-                    <div style="background-color: #8b5cf6; height: 100%; width: 41%; margin-left: 26%; border-radius: 8px;"></div>
+                    <div style="background-color: #8b5cf6; height: 100%; width: 45%; margin-left: 20%; border-radius: 8px;"></div>
                 </div>
             </div>
             <div style="margin-bottom: 14px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px;">
-                    <span>HarnessGuard (Async Sub-Agent)</span>
-                    <span style="font-family: monospace;">1.8s — 4.9s</span>
+                    <span>HarnessGuard (Async)</span>
+                    <span style="font-family: monospace;">Parallel Phase</span>
                 </div>
                 <div style="background-color: #f1f5f9; height: 16px; border-radius: 8px; width: 100%; position: relative;">
-                    <div style="background-color: #ec4899; height: 100%; width: 45%; margin-left: 26%; border-radius: 8px;"></div>
+                    <div style="background-color: #ec4899; height: 100%; width: 42%; margin-left: 20%; border-radius: 8px;"></div>
                 </div>
             </div>
             <div>
                 <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px;">
                     <span>ReadinessScorer (Synthesis)</span>
-                    <span style="font-family: monospace;">4.9s — 6.8s</span>
+                    <span style="font-family: monospace;">Phase 3: Score & Report</span>
                 </div>
                 <div style="background-color: #f1f5f9; height: 16px; border-radius: 8px; width: 100%; position: relative;">
-                    <div style="background-color: #10b981; height: 100%; width: 28%; margin-left: 71%; border-radius: 8px;"></div>
+                    <div style="background-color: #10b981; height: 100%; width: 25%; margin-left: 65%; border-radius: 8px;"></div>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
     with tab4:
-        st.markdown("### Model Efficiency & Resource Expenditure")
-        cost_data = [
-            {"Agent Role": "Scout", "Assigned Model": "claude-haiku-4-5", "Input Tokens": "680", "Output Tokens": "420", "Est. Cost ($)": "$0.00041"},
-            {"Agent Role": "CodeSentinel", "Assigned Model": "claude-haiku-4-5", "Input Tokens": "1,420", "Output Tokens": "680", "Est. Cost ($)": "$0.00088"},
-            {"Agent Role": "ArchitectReview", "Assigned Model": "claude-haiku-4-5", "Input Tokens": "1,850", "Output Tokens": "820", "Est. Cost ($)": "$0.00118"},
-            {"Agent Role": "HarnessGuard", "Assigned Model": "claude-haiku-4-5", "Input Tokens": "1,100", "Output Tokens": "490", "Est. Cost ($)": "$0.00071"},
-            {"Agent Role": "ReadinessScorer", "Assigned Model": "claude-haiku-4-5", "Input Tokens": "1,240", "Output Tokens": "560", "Est. Cost ($)": "$0.00079"},
-        ]
-        st.dataframe(cost_data, hide_index=True, use_container_width=True)
-
-    with tab5:
-        st.markdown("### Raw Inspection Telemetry Dump")
+        st.markdown("### Raw Inspection Telemetry")
+        reports = st.session_state.get("json_reports", {})
         st.json({
-            "inspection_id": "wc_20260627_9942",
-            "repository": repo_data["name"],
-            "shipment_verdict": "READY_FOR_SHIPMENT",
-            "readiness_score": 94,
-            "metadata": {
-                "language": repo_data["language"],
-                "stars": repo_data["stars"],
-                "default_branch": repo_data["branch"]
-            },
-            "execution_summary": {
-                "status": "VERIFIED_STABLE",
-                "inspectors_deployed": 5,
-                "parallel_threads": 3,
-                "total_duration_seconds": 6.8,
-                "total_tokens_consumed": 9290
-            },
-            "sub_agent_reports": [
-                {"agent": "CodeSentinel", "report_path": "workspace/code_sentinel.json", "findings": 2},
-                {"agent": "ArchitectReview", "report_path": "workspace/architect_review.json", "findings": 1},
-                {"agent": "HarnessGuard", "report_path": "workspace/harness_guard.json", "findings": 0}
-            ]
+            "target_url": st.session_state.get("target_url"),
+            "description": st.session_state.get("description"),
+            "elapsed_time": st.session_state.get("elapsed_time"),
+            "pipeline_status": "ERROR" if st.session_state.get("run_error") else "SUCCESS",
+            "reports_generated": list(reports.keys()),
+            "readiness_report_exists": os.path.exists("./workspace/readiness_report.md"),
+            "workspace_files": os.listdir("./workspace") if os.path.exists("./workspace") else []
         })
 
     st.divider()
@@ -622,7 +724,7 @@ if st.session_state.analyzed:
     col_reset1, col_reset2, col_reset3 = st.columns([1, 1, 1])
     with col_reset2:
         if st.button("Run Another WreckCheck", type="primary", use_container_width=True):
-            for key in ["analyzed", "run_completed", "owner", "repo", "repo_data"]:
+            for key in ["analyzed", "run_completed", "owner", "repo", "repo_data", "final_report", "json_reports", "elapsed_time", "run_error", "target_url", "description"]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()

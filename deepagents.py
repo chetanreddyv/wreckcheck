@@ -4,9 +4,9 @@ import uuid
 import concurrent.futures
 import importlib
 from langchain_anthropic import ChatAnthropic
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.tools import Tool, StructuredTool
+from langgraph.prebuilt import create_react_agent
+from langchain_core.tools import StructuredTool
+from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
 
 import tools as tools_module
@@ -134,36 +134,35 @@ class DeepAgent:
             )
             self.resolved_tools.append(wait_tool)
                 
-        # Create the agent
-        from langchain_core.messages import SystemMessage
-        prompt = ChatPromptTemplate.from_messages([
-            SystemMessage(content=self.system_prompt),
-            ("user", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ])
-        
-        agent = create_tool_calling_agent(self.llm, self.resolved_tools, prompt)
-        self.agent_executor = AgentExecutor(
-            agent=agent,
+        # Create the agent using langgraph's create_react_agent
+        self.agent_graph = create_react_agent(
+            model=self.llm,
             tools=self.resolved_tools,
-            verbose=True,
-            handle_parsing_errors=True,
-            max_iterations=25,
-            max_execution_time=300,  # 5 minute hard timeout per agent
+            prompt=SystemMessage(content=self.system_prompt),
+            name=self.name,
         )
 
     def run(self, input_text):
         print(f"\n[{self.name}] Running with input: {input_text}")
-        result = self.agent_executor.invoke({"input": input_text})
-        output = result["output"]
-        if isinstance(output, list):
-            try:
-                output = "".join([b.get("text", "") for b in output if isinstance(b, dict)])
-            except Exception:
-                output = str(output)
-        elif not isinstance(output, str):
-            output = str(output)
-        return output
+        result = self.agent_graph.invoke(
+            {"messages": [HumanMessage(content=input_text)]},
+            config={"recursion_limit": 50}
+        )
+        # Extract the final AI message content from the response
+        messages = result.get("messages", [])
+        if messages:
+            last_msg = messages[-1]
+            content = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+            # Handle list-type content (e.g., content blocks from Anthropic)
+            if isinstance(content, list):
+                try:
+                    content = "".join([b.get("text", "") for b in content if isinstance(b, dict)])
+                except Exception:
+                    content = str(content)
+            elif not isinstance(content, str):
+                content = str(content)
+            return content
+        return "No output generated."
 
 def create_deep_agent(name, model, system_prompt, tools, sub_agents=None, workspace_dir=None, skills=None):
     return DeepAgent(name, model, system_prompt, tools, sub_agents, workspace_dir, skills)
@@ -171,4 +170,3 @@ def create_deep_agent(name, model, system_prompt, tools, sub_agents=None, worksp
 class AsyncSubAgent:
     def __init__(self, name):
         self.name = name
-
